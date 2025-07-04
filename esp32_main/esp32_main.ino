@@ -1,5 +1,8 @@
+// Test code on ESP-32 for Bluetooth Classic
+
 #include <AccelStepper.h>
 #include <ESP32Servo.h>
+#include <BluetoothSerial.h>
 
 const int x_pin = 39; // joystick
 const int y_pin = 36; 
@@ -21,6 +24,16 @@ const int maxSpeed = 1000;
 const int accel = 600;
 const int deadzone = 100;
 
+BluetoothSerial SerialBT;
+
+void goHome() {
+  Serial.println("Going home...");
+  digitalWrite(stp_pin, HIGH);
+  delay(1000);
+  digitalWrite(stp_pin, LOW);
+  delay(1000);
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("Hello from ESP32!");
@@ -39,9 +52,21 @@ void setup() {
   // Servo init
   myServo.attach(pwm_pin);
 
+  SerialBT.begin("ESP32_BT");
+  Serial.println("Bluetooth Started! Waiting for pairing...");
+
 }
 
 void loop() {
+  if (SerialBT.available()) {
+    char c = SerialBT.read();
+    Serial.print("Received: ");
+    Serial.println(c);
+
+    if (c == 'G') {
+      goHome();
+    }
+  }
   // === Read Joystick ===
   int joyX = analogRead(x_pin); // 0–4095 on ESP32
   Serial.println(joyX);
@@ -58,7 +83,7 @@ void loop() {
   bool bottomPressed = digitalRead(bottomLimitPin) == LOW;
 
   // === Determine Direction from Y-axis ===
-  int movementDir;
+  int movementDir = 0;
   if (joyY > 2048 + deadzone) {
     movementDir = 1;
   } else if (joyY < 2048 - deadzone) {
