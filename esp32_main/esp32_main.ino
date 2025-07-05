@@ -62,6 +62,7 @@ void loop() {
     char c = SerialBT.read();
     Serial.print("Received: ");
     Serial.println(c);
+    SerialBT.println("ack");
 
     if (c == 'G') {
       goHome();
@@ -69,13 +70,10 @@ void loop() {
   }
   // === Read Joystick ===
   int joyX = analogRead(x_pin); // 0–4095 on ESP32
-  Serial.println(joyX);
   int joyY = analogRead(y_pin);
-  Serial.println(joyY);
 
   // === Servo Control ===
   int angle = map(joyX, 0, 4095, 0, 180);
-  Serial.println(angle);
   myServo.write(angle);
 
   // === Read Limit Switches ===

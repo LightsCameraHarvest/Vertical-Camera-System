@@ -1,5 +1,5 @@
 /**
-/ Testing joystick with motor controller. 
+/ Testing joystick with motor controller. on Arduino Uno
 / Only implemented "left-right" functionality. 
 / Left rotates stepper motor CCW; right rotates stepper motor CW. 
 / To-do?: implement "up-down" functionality
