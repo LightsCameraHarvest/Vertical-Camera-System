@@ -1,4 +1,3 @@
-#include <Servo.h>
 #include <ESP32Servo.h>
 #include <BluetoothSerial.h>
 
@@ -18,10 +17,10 @@ const int stp_pin = 13;
 // Servo parameters
 Servo myServo;
 const int servo_pin = 4; //servo
-int servoPos = 135; // Start at middle (0–270°)
 const int minAngle = 0;
-const int maxAngle = 270;
-const int stepSize = 1;
+const int maxAngle = 180;
+int servoPos = 90; // Start at middle (0–270°)
+const int stepSize = 5;
 
 // Stepper parameters
 const int deadzone = 100;
@@ -58,20 +57,24 @@ void goHome() {
 
 void stepUp() {
   if(!isTopPressed()) {
-    digitalWrite(dir_pin, HIGH);
-    digitalWrite(stp_pin, HIGH);
-    delayMicroseconds(1000);
-    digitalWrite(stp_pin, LOW);
-    delayMicroseconds(1000);
+    for(int i=0; i<200; i++) {
+      digitalWrite(dir_pin, HIGH);
+      digitalWrite(stp_pin, HIGH);
+      delayMicroseconds(1000);
+      digitalWrite(stp_pin, LOW);
+      delayMicroseconds(1000);
+    }
   }
 }
 void stepDown() {
   if(!isBottomPressed()) {
-    digitalWrite(dir_pin, LOW);
-    digitalWrite(stp_pin, HIGH);
-    delayMicroseconds(1000);
-    digitalWrite(stp_pin, LOW);
-    delayMicroseconds(1000);
+    for(int i=0; i<200; i++) {
+      digitalWrite(dir_pin, LOW);
+      digitalWrite(stp_pin, HIGH);
+      delayMicroseconds(1000);
+      digitalWrite(stp_pin, LOW);
+      delayMicroseconds(1000);
+    }
   }
 }
 
@@ -84,22 +87,9 @@ void panCW() {
   myServo.write(servoPos);
 }
 
-void serialInput() {
-  if (Serial.available()) {
-    int inputLevel = Serial.parseInt();
-    if (inputLevel >= 1 && inputLevel <= 4) {
-      targetLevel = inputLevel;
-      Serial.print("Target level set to: ");
-      Serial.println(targetLevel);
-    } else {
-      Serial.println("Invalid level. Enter 1–4.");
-    }
-  }
-}
-
 void setup() {
   Serial.begin(115200);
-  Serial.println("Hello from ESP32!");
+  // Serial.println("Hello from ESP32!");
   // Stepper setup
   pinMode(ena_pin, OUTPUT);
   digitalWrite(ena_pin, LOW);
@@ -112,13 +102,13 @@ void setup() {
   myServo.attach(servo_pin);
   myServo.write(servoPos);
   // Bluetooth setup
-  SerialBT.begin("ESP32_BT");
+  SerialBT.begin("ESP32_EARTI");
   Serial.println("Bluetooth Started! Waiting for pairing...");
 
-  // Move to home position at top
-  goHome();
-  Serial.println("Enter target level (1–4):");
-  Serial.println("")
+  // // Move to home position at top
+  // goHome();
+  // Serial.println("Enter target level (1–4):");
+  // Serial.println("");
 }
 
 void loop() {
@@ -128,85 +118,68 @@ void loop() {
   // **UPDATE**: Write in "up/down" and "pan CCW/CW" signals from Pi
   if (SerialBT.available()) {
     char cmd = SerialBT.read();
-    Serial.print("Received: ");
-    Serial.println(c);
-    SerialBT.println("ack");
+    // Serial.print("Received: ");
+    // Serial.println(cmd);
+    // SerialBT.println("ack");
 
-    if (cmd == 'up'){
+    if (cmd == 'u'){ // up
       stepUp();
-    } elif (cmd == 'down') {
+      // Serial.println("up");
+    } else if (cmd == 'd') { // down
       stepDown();
-    } elif (cmd == 'ccw') {
+      // Serial.println("down");
+    } else if (cmd == 'l') { // left (CCW)
       panCCW();
-    } elif (cmd == 'cw') {
+      // Serial.println("ccw");
+    } else if (cmd == 'r') { // right (CW)
       panCW();
+      // Serial.println("cw");
     }
-    // if (c == 'G') {
-    //   goHome();
+
+    // switch (cmd) {
+    //   case 1:
+    //     Serial.println("1");
+
+    //     break;
+    //   case 2:
+    //     Serial.println("2");
+
+    //     break;
+    //   case 3:
+    //     Serial.println("3");
+
+    //     break;
+    //   case 4:
+    //     Serial.println("4");
+
+    //     break;
+    //   case 5:
+    //     Serial.println("5");
+
+    //     break;
+    //   case 6:
+    //     Serial.println("6");
+
+    //     break;
+    //   case 7:
+    //     Serial.println("7");
+
+    //     break;
+    //   case 8:
+    //     Serial.println("8");
+    //     break;
+    //   case 9:
+    //     Serial.println("9");
+    //     break;
+    //   case 10: 
+    //     Serial.println("10");
+    //     break;
+    //   default:
+    //     Serial.println("Unknown mode");
+    //     break;
     // }
 
-    switch (cmd) {
-      case 1:
-        Serial.println("1");
-
-        break;
-      case 2:
-        Serial.println("2");
-
-        break;
-      case 3:
-        Serial.println("3");
-
-        break;
-      case 4:
-        Serial.println("4");
-
-        break;
-      case 5:
-        Serial.println("5");
-
-        break;
-      case 6:
-        Serial.println("6");
-
-        break;
-      case 7:
-        Serial.println("7");
-
-        break;
-      case 8:
-        Serial.println("8");
-        break;
-      case 9:
-        Serial.println("9");
-        break;
-      case 10: 
-        Serial.println("10");
-        break;
-      default:
-        Serial.println("Unknown mode");
-        break;
-}
-
 
   }
-
-
-  // Panning
-  int joyY = analogRead(joyYPin);
-  int joyX = analogRead(joyXPin);
-  if (joyX < 512 - deadzone) {
-    panCCW();
-  } else if (joyX > 512 + deadzone) {
-    panCW();
-  }
-
-  // Stepping
-  if (joyY > 512 + deadzone) {
-    stepUp();
-  } else if (joyY < 512 - deadzone) {
-    stepDown();
-  }
-
   delay(50);
 }
