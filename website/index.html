@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EARTI Stream Viewer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>EARTI Stream Viewer</h1>
+
+    <div class="selector">
+      <div class="selector-row">
+        <label for="earti-select">Select EARTI Unit:</label>
+        <select id="earti-select">
+          <option disabled selected value>Select an EARTI</option>
+          <option value="earti1">EARTI 1</option>
+          <option value="earti2">EARTI 2</option>
+        </select>
+        <button id="add-earti-btn">+ Add EARTI</button>
+      </div>
+
+      <div class="label-row">
+        <label for="camera-select">Select Camera:</label>
+        <select id="camera-select" disabled>
+          <option disabled selected value>Select a camera</option>
+          <option value="cam1">Camera 1</option>
+          <option value="cam2">Camera 2</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="video-container" id="video-container">
+      <!-- iframe inserted by script.js -->
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
