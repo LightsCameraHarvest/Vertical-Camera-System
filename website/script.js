@@ -5,7 +5,7 @@ const videoContainer = document.getElementById("video-container");
 
 const streamURLs = {
   earti1: {
-    cam1: "https://streaming.earti.dev/api/whep?src=cam1", // <-- update this with real stream name
+    cam1: "https://streaming.earti.dev/api/whep?src=cam", // <-- update this with real stream name
     cam2: "https://streaming.earti.dev/api/whep?src=cam2"
   },
   earti2: {
