@@ -5,55 +5,137 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const streamURLs = {
     earti1: {
-      cam1: "https://streaming.earti.dev/api/whep?src=cam",
-      cam2: "https://streaming.earti.dev/api/whep?src=cam2"
+      cam1: "https://streaming.earti.dev/cam/whep",
+      cam2: "https://streaming.earti.dev/cam2/whep"
     },
     earti2: {
-      cam1: "https://streaming.earti2.dev/api/whep?src=cam1",
-      cam2: "https://streaming.earti2.dev/api/whep?src=cam2"
+      cam1: "https://streaming.earti2.dev/cam1/whep",
+      cam2: "https://streaming.earti2.dev/cam2/whep"
     }
   };
 
   let currentPeer = null;
 
   eartiSelect.addEventListener("change", () => {
+    console.log("EARTI select changed");
     cameraSelect.disabled = false;
     cameraSelect.selectedIndex = 0;
     videoContainer.innerHTML = "";
   });
 
   cameraSelect.addEventListener("change", async () => {
+    console.log("Camera select changed - handler start");
+
     const earti = eartiSelect.value;
     const cam = cameraSelect.value;
     const url = streamURLs[earti][cam];
+    console.log("Selected earti:", earti, "Selected cam:", cam);
+    console.log("Stream URL:", url);
 
-    videoContainer.innerHTML = `<video id="video" autoplay playsinline controls></video>`;
+    videoContainer.innerHTML = `<div id="video" autoplay playsinline controls></div>`;
     const video = document.getElementById("video");
+    console.log("Video element created:", video);
 
     if (currentPeer) {
+      console.log("Closing existing peer connection");
       currentPeer.close();
       currentPeer = null;
     }
 
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-    currentPeer = pc;
+    try {
+      console.log("Loading TURN config from /turn.json...");
+      const turnRes = await fetch("/turn.json");
+      const turnData = await turnRes.json();
 
-    pc.ontrack = (event) => {
-      video.srcObject = event.streams[0];
-    };
+      if (!Array.isArray(turnData.iceServers)) {
+        throw new Error("Invalid TURN configuration: missing iceServers array");
+      }
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" }, // fallback STUN
+          ...turnData.iceServers
+        ]
+      });
+      currentPeer = pc;
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "offer", sdp: offer.sdp })
-    });
+      pc.ontrack = (event) => {
+        console.log("Received track event", event);
+        video.srcObject = event.streams[0];
+      };
 
-    const answer = await res.json();
-    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          console.log("ICE Candidate:", e.candidate);
+        } else {
+          console.log("ICE gathering done");
+        }
+      };
+
+      console.log("Creating offer...");
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      console.log("Local description set");
+
+      console.log("Waiting for ICE gathering to complete (onicecandidate)...");
+      await new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          console.warn("ICE gathering timeout");
+          resolve();
+        }, 8000);
+
+        if (pc.iceGatheringState === "complete") {
+          clearTimeout(timeout);
+          console.log("ICE already complete");
+          resolve();
+        } else {
+          pc.addEventListener("icegatheringstatechange", () => {
+            if (pc.iceGatheringState === "complete") {
+              clearTimeout(timeout);
+              console.log("ICE gathering complete (via event)");
+              resolve();
+            }
+          });
+        }
+      });
+
+      console.log("Sending offer to streaming server:", url);
+      console.log("Final SDP:\n", pc.localDescription.sdp);
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/sdp"
+        },
+        body: pc.localDescription.sdp
+      });
+
+      const text = await res.text();
+      console.log("Response status:", res.status);
+      console.log("Response body:", text);
+
+      if (!res.ok) {
+        console.error("Streaming server error:", res.status, text);
+        alert(`Streaming error: ${res.status}`);
+        return;
+      }
+
+      let answer;
+      try {
+        answer = JSON.parse(text);
+      } catch (e) {
+        console.error("Failed to parse SDP answer:", e);
+        alert("Invalid answer from server.");
+        return;
+      }
+
+      console.log("Setting remote description...");
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      console.log("Remote description set successfully");
+
+    } catch (err) {
+      console.error("Error setting up stream:", err);
+      alert("Failed to connect to stream.");
+    }
   });
 });
