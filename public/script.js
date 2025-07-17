@@ -1,151 +1,52 @@
 document.addEventListener("DOMContentLoaded", () => {
-  const eartiSelect = document.getElementById("earti-select");
-  const cameraSelect = document.getElementById("camera-select");
-  const videoContainer = document.getElementById("video-container");
+  const cameraSelect = document.getElementById("cameraSelect");
+  const videoContainer = document.getElementById("videoContainer");
+  const controlsContainer = document.getElementById("controlsContainer");
 
-  const streamURLs = {
-    earti1: {
-      cam1: "https://streaming.earti.dev/cam/whep",
-      cam2: "https://streaming2.earti.dev/cam/whep"
-    },
-    earti2: {
-      cam1: "https://streaming.earti.dev/cam/whep",
-      cam2: "https://streaming2.earti.dev/cam/whep"
-    }
-  };
+  function createVideoElement(streamUrl) {
+    const iframe = document.createElement("iframe");
+    iframe.src = streamUrl;
+    iframe.width = "480";
+    iframe.height = "270";
+    iframe.allow = "autoplay; fullscreen";
+    iframe.style.border = "none";
+    return iframe;
+  }
 
-  let currentPeer = null;
+  function createArrowControls(label) {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = `<h3>${label}</h3>`;
+    const controls = document.createElement("div");
+    controls.className = "arrow-keys";
 
-  eartiSelect.addEventListener("change", () => {
-    console.log("EARTI select changed");
-    cameraSelect.disabled = false;
-    cameraSelect.selectedIndex = 0;
+    ["↑", "←", "→", "↓"].forEach((arrow) => {
+      const btn = document.createElement("button");
+      btn.textContent = arrow;
+      controls.appendChild(btn);
+    });
+
+    wrapper.appendChild(controls);
+    return wrapper;
+  }
+
+  function loadCameras() {
+    const selection = cameraSelect.value;
     videoContainer.innerHTML = "";
-  });
+    controlsContainer.innerHTML = "";
 
-  cameraSelect.addEventListener("change", async () => {
-    console.log("Camera select changed - handler start");
-
-    const earti = eartiSelect.value;
-    const cam = cameraSelect.value;
-    const url = streamURLs[earti][cam];
-    console.log("Selected earti:", earti, "Selected cam:", cam);
-    console.log("Stream URL:", url);
-
-    // Create VIDEO element (not div!)
-    videoContainer.innerHTML = `<video id="video" autoplay playsinline controls></video>`;
-    const video = document.getElementById("video");
-    console.log("Video element created:", video);
-
-    if (currentPeer) {
-      console.log("Closing existing peer connection");
-      currentPeer.close();
-      currentPeer = null;
+    if (selection === "cam1" || selection === "both") {
+      videoContainer.appendChild(createVideoElement("https://streaming.earti.dev/cam/"));
+      controlsContainer.appendChild(createArrowControls("Camera 1"));
     }
 
-    try {
-      console.log("Loading TURN config from /turn.json...");
-      const turnRes = await fetch("/turn.json");
-      const turnData = await turnRes.json();
-
-      if (!Array.isArray(turnData.iceServers)) {
-        throw new Error("Invalid TURN configuration: missing iceServers array");
-      }
-
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" }, // fallback STUN
-          ...turnData.iceServers
-        ]
-      });
-      currentPeer = pc;
-
-      pc.ontrack = (event) => {
-        console.log("Received track event", event);
-        video.srcObject = event.streams[0];
-      };
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          console.log("ICE Candidate:", e.candidate);
-        } else {
-          console.log("ICE gathering done");
-        }
-      };
-
-      // CRITICAL: Add transceivers for receiving video and audio
-      pc.addTransceiver('video', { direction: 'recvonly' });
-      pc.addTransceiver('audio', { direction: 'recvonly' });
-      console.log("Added transceivers for video and audio");
-
-      console.log("Creating offer...");
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      console.log("Local description set");
-
-      console.log("Waiting for ICE gathering to complete (onicecandidate)...");
-      await new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-          console.warn("ICE gathering timeout");
-          resolve();
-        }, 8000);
-
-        if (pc.iceGatheringState === "complete") {
-          clearTimeout(timeout);
-          console.log("ICE already complete");
-          resolve();
-        } else {
-          pc.addEventListener("icegatheringstatechange", () => {
-            if (pc.iceGatheringState === "complete") {
-              clearTimeout(timeout);
-              console.log("ICE gathering complete (via event)");
-              resolve();
-            }
-          });
-        }
-      });
-
-      console.log("Sending offer to streaming server:", url);
-      console.log("Final SDP:\n", pc.localDescription.sdp);
-
-      // Send as raw SDP with correct Content-Type
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/sdp"
-        },
-        body: pc.localDescription.sdp
-      });
-
-      const text = await res.text();
-      console.log("Response status:", res.status);
-      console.log("Response body:", text);
-
-      if (!res.ok) {
-        console.error("Streaming server error:", res.status, text);
-        alert(`Streaming error: ${res.status}`);
-        return;
-      }
-
-      let answer;
-      try {
-        // Try parsing as JSON first
-        answer = JSON.parse(text);
-      } catch (e) {
-        // If JSON parsing fails, treat as raw SDP
-        answer = {
-          type: "answer",
-          sdp: text
-        };
-      }
-
-      console.log("Setting remote description...");
-      await pc.setRemoteDescription(new RTCSessionDescription(answer));
-      console.log("Remote description set successfully");
-
-    } catch (err) {
-      console.error("Error setting up stream:", err);
-      alert("Failed to connect to stream.");
+    if (selection === "cam2" || selection === "both") {
+      videoContainer.appendChild(createVideoElement("https://streaming2.earti.dev/cam/"));
+      controlsContainer.appendChild(createArrowControls("Camera 2"));
     }
-  });
+  }
+
+  cameraSelect.addEventListener("change", loadCameras);
+
+  // Load default view
+  loadCameras();
 });
