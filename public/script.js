@@ -6,11 +6,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const streamURLs = {
     earti1: {
       cam1: "https://streaming.earti.dev/cam/whep",
-      cam2: "https://streaming.earti.dev/cam2/whep"
+      cam2: "https://streaming2.earti.dev/cam/whep"
     },
     earti2: {
-      cam1: "https://streaming.earti2.dev/cam1/whep",
-      cam2: "https://streaming.earti2.dev/cam2/whep"
+      cam1: "https://streaming.earti.dev/cam/whep",
+      cam2: "https://streaming2.earti.dev/cam/whep"
     }
   };
 
@@ -32,7 +32,8 @@ document.addEventListener("DOMContentLoaded", () => {
     console.log("Selected earti:", earti, "Selected cam:", cam);
     console.log("Stream URL:", url);
 
-    videoContainer.innerHTML = `<div id="video" autoplay playsinline controls></div>`;
+    // Create VIDEO element (not div!)
+    videoContainer.innerHTML = `<video id="video" autoplay playsinline controls></video>`;
     const video = document.getElementById("video");
     console.log("Video element created:", video);
 
@@ -72,6 +73,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       };
 
+      // CRITICAL: Add transceivers for receiving video and audio
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+      console.log("Added transceivers for video and audio");
+
       console.log("Creating offer...");
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -102,6 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log("Sending offer to streaming server:", url);
       console.log("Final SDP:\n", pc.localDescription.sdp);
 
+      // Send as raw SDP with correct Content-Type
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -122,11 +129,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
       let answer;
       try {
+        // Try parsing as JSON first
         answer = JSON.parse(text);
       } catch (e) {
-        console.error("Failed to parse SDP answer:", e);
-        alert("Invalid answer from server.");
-        return;
+        // If JSON parsing fails, treat as raw SDP
+        answer = {
+          type: "answer",
+          sdp: text
+        };
       }
 
       console.log("Setting remote description...");
