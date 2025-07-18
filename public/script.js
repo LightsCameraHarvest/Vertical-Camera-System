@@ -113,6 +113,20 @@ document.addEventListener("DOMContentLoaded", () => {
     reconnectTimers.clear();
   }
 
+  function attemptReconnection(peerId, streamUrl, videoElement, maxRetries) {
+    console.log(`Attempting reconnection for ${peerId}...`);
+    
+    if (reconnectTimers.has(peerId)) {
+      clearTimeout(reconnectTimers.get(peerId));
+    }
+    
+    const timer = setTimeout(() => {
+      setupWebRTCStreamForVideo(streamUrl, videoElement, peerId, maxRetries);
+    }, 3000);
+    
+    reconnectTimers.set(peerId, timer);
+  }
+
   async function loadTurnConfig() {
     try {
       console.log("Loading TURN configuration from /turn.json...");
@@ -181,6 +195,46 @@ document.addEventListener("DOMContentLoaded", () => {
       const pc = new RTCPeerConnection(config);
       activePeers.set(peerId, pc);
 
+      // CRITICAL: Handle incoming remote stream
+      pc.ontrack = (event) => {
+        console.log(`Received remote stream for ${peerId}:`, event.streams[0]);
+        
+        if (event.streams && event.streams[0]) {
+          videoElement.srcObject = event.streams[0];
+          console.log(`Video stream attached to element for ${peerId}`);
+          
+          // Wait for the video to be ready before playing
+          videoElement.oncanplay = () => {
+            videoElement.play().catch(error => {
+              console.error(`Error playing video for ${peerId}:`, error);
+            });
+          };
+        } else {
+          console.error(`No stream received in track event for ${peerId}`);
+        }
+      };
+
+      // Add video element event handlers for debugging
+      videoElement.onerror = (error) => {
+        console.error(`Video element error for ${peerId}:`, error);
+      };
+
+      videoElement.onloadstart = () => {
+        console.log(`Video started loading for ${peerId}`);
+      };
+
+      videoElement.onloadedmetadata = () => {
+        console.log(`Video metadata loaded for ${peerId}`, {
+          width: videoElement.videoWidth,
+          height: videoElement.videoHeight,
+          duration: videoElement.duration
+        });
+      };
+
+      videoElement.onplaying = () => {
+        console.log(`Video is now playing for ${peerId}`);
+      };
+
       // Enhanced connection state monitoring with better logging
       pc.oniceconnectionstatechange = () => {
         console.log(`ICE connection state for ${peerId}:`, pc.iceConnectionState);
@@ -224,12 +278,12 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       await pc.setLocalDescription(offer);
 
-      // Enhanced ICE gathering with longer timeout for TURN servers
+      // Enhanced ICE gathering with shorter timeout for better performance
       await new Promise((resolve) => {
         const timeout = setTimeout(() => {
           console.warn(`ICE gathering timeout for ${peerId} - proceeding with available candidates`);
           resolve();
-        }, 15000); // Increased timeout for TURN server gathering
+        }, 5000); // Reduced timeout for better performance
 
         if (pc.iceGatheringState === "complete") {
           clearTimeout(timeout);
@@ -399,13 +453,16 @@ document.addEventListener("DOMContentLoaded", () => {
     
     try {
       // Connect to first camera
-      await setupWebRTCStreamForVideo(streamURLs[earti].cam1, video1, "cam1");
+      const pc1Promise = setupWebRTCStreamForVideo(streamURLs[earti].cam1, video1, "cam1");
       
       // Wait a bit before connecting to second camera to reduce resource contention
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay
       
       // Connect to second camera
-      await setupWebRTCStreamForVideo(streamURLs[earti].cam2, video2, "cam2");
+      const pc2Promise = setupWebRTCStreamForVideo(streamURLs[earti].cam2, video2, "cam2");
+      
+      // Wait for both connections to complete
+      await Promise.all([pc1Promise, pc2Promise]);
       
       // Add controls for both cameras
       controlsContainer.appendChild(createDPad("Camera 1"));
