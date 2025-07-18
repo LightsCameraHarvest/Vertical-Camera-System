@@ -202,7 +202,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadTurnConfig() {
     try {
       console.log("Loading TURN configuration from /turn.json...");
-      const turnRes = await fetch("/turn.json");
+      const turnRes = await fetch("turn.json");
       
       if (!turnRes.ok) {
         throw new Error(`Failed to load turn.json: ${turnRes.status} ${turnRes.statusText}`);
