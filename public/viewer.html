@@ -3,13 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>EARTI Viewer</title>
+  <title>EARTI Media Viewer</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="container">
-    <h1>EARTI Media Viewer</h1>
-
     <div class="camera-selector">
       <label for="cameraSelect">Choose camera view:</label>
       <select id="cameraSelect">
@@ -19,13 +17,8 @@
       </select>
     </div>
 
-    <div id="videoContainer" class="video-container">
-      <!-- Streams will be injected here -->
-    </div>
-
-    <div id="controlsContainer" class="controls-container">
-      <!-- Controls will be injected here -->
-    </div>
+    <div id="videoContainer" class="video-container"></div>
+    <div id="controlsContainer" class="controls-container"></div>
   </div>
 
   <script src="script.js"></script>
