@@ -17,17 +17,88 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const eartiSelect = document.getElementById("eartiSelect");
   
-  // Better peer connection management
-  let activePeers = new Map(); // Track multiple peer connections
-  let connectionAttempts = new Map(); // Track retry attempts
-  let reconnectTimers = new Map(); // Track reconnection timers
+  // Mobile detection
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid = /Android/.test(navigator.userAgent);
+  
+  console.log("Device detection:", { isMobile, isIOS, isAndroid });
+  
+  // Enhanced mobile-friendly play button function
+  function addPlayButton(videoElement, peerId) {
+    // Check if play button already exists
+    const existingButton = videoElement.parentElement.querySelector('.play-button');
+    if (existingButton) return;
+    
+    const playButton = document.createElement('button');
+    playButton.className = 'play-button';
+    playButton.innerHTML = '▶ Tap to Play';
+    playButton.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 12px 24px;
+      font-size: 16px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      z-index: 1000;
+      font-family: Arial, sans-serif;
+      touch-action: manipulation;
+    `;
+    
+    // Make the video container relative positioned
+    videoElement.parentElement.style.position = 'relative';
+    
+    // Enhanced mobile play handling
+    const playHandler = async () => {
+      try {
+        // For mobile, ensure proper video attributes
+        videoElement.muted = true;
+        videoElement.playsInline = true;
+        videoElement.setAttribute('playsinline', 'true');
+        videoElement.setAttribute('webkit-playsinline', 'true');
+        
+        await videoElement.play();
+        playButton.remove();
+        console.log(`Manual play successful for ${peerId}`);
+      } catch (error) {
+        console.error(`Manual play failed for ${peerId}:`, error);
+        // Try again with different approach
+        setTimeout(() => {
+          videoElement.play().catch(e => console.error(`Retry play failed for ${peerId}:`, e));
+        }, 1000);
+      }
+    };
+    
+    playButton.addEventListener('click', playHandler);
+    playButton.addEventListener('touchstart', playHandler);
+    
+    videoElement.parentElement.appendChild(playButton);
+  }
 
-  // Base configuration - will be enhanced with TURN servers
+  // Better peer connection management
+  let activePeers = new Map();
+  let connectionAttempts = new Map();
+  let reconnectTimers = new Map();
+
+  // Enhanced RTC configuration for mobile
   const baseRtcConfig = {
-    iceCandidatePoolSize: 10, // Increased for better NAT traversal
+    iceCandidatePoolSize: 10,
     iceTransportPolicy: "all",
     bundlePolicy: "max-bundle",
-    rtcpMuxPolicy: "require"
+    rtcpMuxPolicy: "require",
+    // Mobile-specific settings
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun2.l.google.com:19302" },
+      { urls: "stun:stun3.l.google.com:19302" },
+      { urls: "stun:stun4.l.google.com:19302" }
+    ]
   };
 
   function createPresetSelect(label) {
@@ -72,6 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.disabled = true;
       } else {
         btn.textContent = dir;
+        btn.style.touchAction = "manipulation"; // Better mobile touch handling
         btn.addEventListener("click", () => {
           console.log(`Move ${label} ${dir}`);
           // TODO: Send command to Raspberry Pi
@@ -143,36 +215,96 @@ document.addEventListener("DOMContentLoaded", () => {
         throw new Error("Invalid TURN configuration: missing or invalid iceServers array");
       }
       
-      // Validate that we have TURN servers (not just STUN)
-      const hasTurnServers = turnData.iceServers.some(server => 
-        server.urls && server.urls.some(url => url.includes('turn:') || url.includes('turns:'))
-      );
+      // Enhanced configuration for mobile
+      const mobileConfig = {
+        ...baseRtcConfig,
+        iceServers: [
+          // Keep existing STUN servers for fallback
+          ...baseRtcConfig.iceServers,
+          // Add TURN servers from config
+          ...turnData.iceServers
+        ]
+      };
       
-      if (!hasTurnServers) {
-        console.warn("No TURN servers found in configuration - may not work across different networks");
-      } else {
-        console.log("TURN servers found - should work across different networks");
+      // For mobile, force more aggressive ICE transport
+      if (isMobile) {
+        mobileConfig.iceTransportPolicy = "relay"; // Force TURN usage on mobile
+        mobileConfig.iceCandidatePoolSize = 20; // More candidates for mobile
       }
       
-      return {
-        ...baseRtcConfig,
-        iceServers: turnData.iceServers
-      };
+      console.log("Final RTC config:", mobileConfig);
+      return mobileConfig;
       
     } catch (error) {
       console.error("Error loading TURN config:", error);
-      console.warn("Falling back to basic STUN-only configuration");
+      console.warn("Falling back to enhanced STUN-only configuration");
       
-      // Fallback to basic STUN servers
-      return {
+      // Enhanced fallback for mobile
+      const fallbackConfig = {
         ...baseRtcConfig,
         iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" }
+          ...baseRtcConfig.iceServers,
+          // Add more public STUN servers
+          { urls: "stun:stun.cloudflare.com:3478" },
+          { urls: "stun:global.stun.twilio.com:3478" }
         ]
       };
+      
+      if (isMobile) {
+        fallbackConfig.iceCandidatePoolSize = 20;
+      }
+      
+      return fallbackConfig;
     }
+  }
+
+  // Enhanced mobile video element setup
+  function setupVideoElement(videoElement, peerId) {
+    // Mobile-specific video attributes
+    videoElement.muted = true; // Required for mobile autoplay
+    videoElement.playsInline = true;
+    videoElement.setAttribute('playsinline', 'true');
+    videoElement.setAttribute('webkit-playsinline', 'true');
+    videoElement.setAttribute('x-webkit-airplay', 'allow');
+    
+    // iOS-specific settings
+    if (isIOS) {
+      videoElement.setAttribute('controls', 'false'); // Hide controls initially on iOS
+      videoElement.setAttribute('preload', 'metadata');
+    }
+    
+    // Enhanced video event handlers
+    videoElement.onerror = (error) => {
+      console.error(`Video element error for ${peerId}:`, error);
+    };
+
+    videoElement.onloadstart = () => {
+      console.log(`Video started loading for ${peerId}`);
+    };
+
+    videoElement.onloadedmetadata = () => {
+      console.log(`Video metadata loaded for ${peerId}`, {
+        width: videoElement.videoWidth,
+        height: videoElement.videoHeight,
+        duration: videoElement.duration
+      });
+    };
+
+    videoElement.oncanplay = () => {
+      console.log(`Video can play for ${peerId}`);
+    };
+
+    videoElement.onplaying = () => {
+      console.log(`Video is now playing for ${peerId}`);
+    };
+
+    videoElement.onwaiting = () => {
+      console.log(`Video is waiting for ${peerId}`);
+    };
+
+    videoElement.onstalled = () => {
+      console.log(`Video stalled for ${peerId}`);
+    };
   }
 
   async function setupWebRTCStreamForVideo(streamUrl, videoElement, peerId, maxRetries = 3) {
@@ -186,56 +318,89 @@ document.addEventListener("DOMContentLoaded", () => {
     connectionAttempts.set(peerId, attempts + 1);
     
     try {
-      console.log(`Setting up stream for ${peerId} (attempt ${attempts + 1})`);
+      console.log(`Setting up stream for ${peerId} (attempt ${attempts + 1}) - Mobile: ${isMobile}`);
       
       // Clean up any existing connection for this peer
       cleanupPeerConnection(peerId);
+      
+      // Setup video element with mobile-specific attributes
+      setupVideoElement(videoElement, peerId);
       
       const config = await loadTurnConfig();
       const pc = new RTCPeerConnection(config);
       activePeers.set(peerId, pc);
 
-      // CRITICAL: Handle incoming remote stream
+      // Enhanced mobile-friendly stream handling
       pc.ontrack = (event) => {
         console.log(`Received remote stream for ${peerId}:`, event.streams[0]);
         
         if (event.streams && event.streams[0]) {
-          videoElement.srcObject = event.streams[0];
+          const stream = event.streams[0];
+          videoElement.srcObject = stream;
           console.log(`Video stream attached to element for ${peerId}`);
           
-          // Wait for the video to be ready before playing
-          videoElement.oncanplay = () => {
-            videoElement.play().catch(error => {
-              console.error(`Error playing video for ${peerId}:`, error);
-            });
+          // Enhanced mobile play handling
+          const attemptPlay = async () => {
+            try {
+              console.log(`Attempting to play video for ${peerId}`);
+              
+              // Wait for video to be ready
+              if (videoElement.readyState < 3) {
+                console.log(`Video not ready for ${peerId}, waiting...`);
+                return;
+              }
+              
+              await videoElement.play();
+              console.log(`Video started playing for ${peerId}`);
+              
+              // Show controls after successful play
+              if (isIOS) {
+                videoElement.controls = true;
+              }
+              
+            } catch (error) {
+              console.warn(`Autoplay failed for ${peerId}:`, error.name, error.message);
+              
+              // Add play button for user interaction
+              addPlayButton(videoElement, peerId);
+              
+              // For mobile, try to play on next user interaction
+              if (isMobile) {
+                const playOnInteraction = async () => {
+                  try {
+                    await videoElement.play();
+                    console.log(`Video started playing after user interaction for ${peerId}`);
+                    document.removeEventListener('touchstart', playOnInteraction);
+                    document.removeEventListener('click', playOnInteraction);
+                  } catch (e) {
+                    console.error(`Play on interaction failed for ${peerId}:`, e);
+                  }
+                };
+                
+                document.addEventListener('touchstart', playOnInteraction, { once: true });
+                document.addEventListener('click', playOnInteraction, { once: true });
+              }
+            }
           };
+          
+          // Multiple trigger points for playing
+          videoElement.oncanplay = attemptPlay;
+          videoElement.oncanplaythrough = attemptPlay;
+          
+          // Try immediately if ready
+          if (videoElement.readyState >= 3) {
+            attemptPlay();
+          }
+          
+          // Also try after a short delay
+          setTimeout(attemptPlay, 1000);
+          
         } else {
           console.error(`No stream received in track event for ${peerId}`);
         }
       };
 
-      // Add video element event handlers for debugging
-      videoElement.onerror = (error) => {
-        console.error(`Video element error for ${peerId}:`, error);
-      };
-
-      videoElement.onloadstart = () => {
-        console.log(`Video started loading for ${peerId}`);
-      };
-
-      videoElement.onloadedmetadata = () => {
-        console.log(`Video metadata loaded for ${peerId}`, {
-          width: videoElement.videoWidth,
-          height: videoElement.videoHeight,
-          duration: videoElement.duration
-        });
-      };
-
-      videoElement.onplaying = () => {
-        console.log(`Video is now playing for ${peerId}`);
-      };
-
-      // Enhanced connection state monitoring with better logging
+      // Enhanced connection state monitoring
       pc.oniceconnectionstatechange = () => {
         console.log(`ICE connection state for ${peerId}:`, pc.iceConnectionState);
         
@@ -243,14 +408,15 @@ document.addEventListener("DOMContentLoaded", () => {
           console.log(`${peerId}: ICE connectivity checks in progress...`);
         } else if (pc.iceConnectionState === 'connected') {
           console.log(`${peerId}: ICE connection established successfully`);
-          connectionAttempts.set(peerId, 0); // Reset retry counter
+          connectionAttempts.set(peerId, 0);
         } else if (pc.iceConnectionState === 'completed') {
-          console.log(`${peerId}: ICE connection completed (all checks done)`);
+          console.log(`${peerId}: ICE connection completed`);
         } else if (pc.iceConnectionState === 'failed') {
-          console.error(`${peerId}: ICE connection failed - may need TURN servers`);
+          console.error(`${peerId}: ICE connection failed - likely NAT/firewall issue`);
+          console.error(`${peerId}: Consider using TURN servers for mobile compatibility`);
           attemptReconnection(peerId, streamUrl, videoElement, maxRetries);
         } else if (pc.iceConnectionState === 'disconnected') {
-          console.warn(`${peerId}: ICE connection disconnected - attempting reconnect`);
+          console.warn(`${peerId}: ICE connection disconnected`);
           attemptReconnection(peerId, streamUrl, videoElement, maxRetries);
         }
       };
@@ -262,28 +428,40 @@ document.addEventListener("DOMContentLoaded", () => {
       pc.onicecandidate = (e) => {
         if (e.candidate) {
           console.log(`ICE candidate for ${peerId}:`, e.candidate.type, e.candidate.protocol);
-          // Log if we're getting relay candidates (TURN)
           if (e.candidate.type === 'relay') {
-            console.log(`${peerId}: TURN relay candidate found - good for NAT traversal`);
+            console.log(`${peerId}: TURN relay candidate found - excellent for mobile`);
+          } else if (e.candidate.type === 'srflx') {
+            console.log(`${peerId}: STUN server reflexive candidate found`);
+          } else if (e.candidate.type === 'host') {
+            console.log(`${peerId}: Host candidate found`);
           }
         } else {
           console.log(`ICE candidate gathering complete for ${peerId}`);
         }
       };
 
-      // Create offer with optimized settings
-      const offer = await pc.createOffer({
+      // Create offer with mobile-optimized settings
+      const offerOptions = {
         offerToReceiveVideo: true,
         offerToReceiveAudio: true
-      });
+      };
+      
+      // Mobile-specific offer constraints
+      if (isMobile) {
+        offerOptions.voiceActivityDetection = false; // Reduce processing
+      }
+      
+      const offer = await pc.createOffer(offerOptions);
       await pc.setLocalDescription(offer);
 
-      // Enhanced ICE gathering with shorter timeout for better performance
+      // Enhanced ICE gathering with mobile-appropriate timeout
+      const iceGatheringTimeout = isMobile ? 10000 : 5000; // Longer timeout for mobile
+      
       await new Promise((resolve) => {
         const timeout = setTimeout(() => {
-          console.warn(`ICE gathering timeout for ${peerId} - proceeding with available candidates`);
+          console.warn(`ICE gathering timeout for ${peerId} after ${iceGatheringTimeout}ms`);
           resolve();
-        }, 5000); // Reduced timeout for better performance
+        }, iceGatheringTimeout);
 
         if (pc.iceGatheringState === "complete") {
           clearTimeout(timeout);
@@ -305,26 +483,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const localSDP = pc.localDescription.sdp;
       
-      // Enhanced SDP validation
+      // Enhanced SDP validation with mobile-specific checks
       if (!localSDP.includes("a=ice-ufrag:") || !localSDP.includes("a=ice-pwd:")) {
         throw new Error(`Local SDP for ${peerId} is missing ICE credentials`);
       }
       
-      // Check if we have TURN candidates in the SDP
       const hasRelayCandidates = localSDP.includes("typ relay");
       const hasSrflxCandidates = localSDP.includes("typ srflx");
+      const hasHostCandidates = localSDP.includes("typ host");
       
       console.log(`${peerId} SDP analysis:`, {
         hasRelayCandidates,
         hasSrflxCandidates,
-        sdpLength: localSDP.length
+        hasHostCandidates,
+        sdpLength: localSDP.length,
+        mobile: isMobile
       });
       
-      if (!hasRelayCandidates && !hasSrflxCandidates) {
-        console.warn(`${peerId}: No TURN/STUN candidates found - may not work across different networks`);
+      if (isMobile && !hasRelayCandidates) {
+        console.warn(`${peerId}: Mobile device without TURN relay candidates - connection may fail`);
       }
 
       console.log(`Sending offer to streaming server for ${peerId}`);
+      
+      // Enhanced fetch with mobile-appropriate timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
       
       const res = await fetch(streamUrl, {
         method: "POST",
@@ -332,8 +516,11 @@ document.addEventListener("DOMContentLoaded", () => {
           "Content-Type": "application/sdp",
           "Accept": "application/sdp"
         },
-        body: localSDP
+        body: localSDP,
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       if (!res.ok) {
         const text = await res.text();
@@ -341,6 +528,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const answerSDP = await res.text();
+      
+      // Validate answer SDP
+      if (!answerSDP.includes("a=ice-ufrag:") || !answerSDP.includes("a=ice-pwd:")) {
+        throw new Error(`Answer SDP for ${peerId} is missing ICE credentials`);
+      }
+      
       await pc.setRemoteDescription(new RTCSessionDescription({ 
         type: "answer", 
         sdp: answerSDP 
@@ -351,17 +544,48 @@ document.addEventListener("DOMContentLoaded", () => {
 
     } catch (error) {
       console.error(`Error setting up stream for ${peerId}:`, error);
+      
+      // Enhanced error handling for mobile
+      if (error.name === 'AbortError') {
+        console.error(`${peerId}: Request timeout - check network connection`);
+      } else if (error.name === 'NotAllowedError') {
+        console.error(`${peerId}: Media access denied - check permissions`);
+      }
+      
       cleanupPeerConnection(peerId);
       
-      // Retry logic
+      // Retry logic with exponential backoff
       if (attempts < maxRetries) {
-        console.log(`Retrying connection for ${peerId} in 3 seconds...`);
+        const delay = Math.min(3000 * Math.pow(2, attempts), 10000); // Max 10s delay
+        console.log(`Retrying connection for ${peerId} in ${delay}ms...`);
         const timer = setTimeout(() => {
           setupWebRTCStreamForVideo(streamUrl, videoElement, peerId, maxRetries);
-        }, 3000);
+        }, delay);
         reconnectTimers.set(peerId, timer);
       } else {
         console.error(`Failed to establish connection for ${peerId} after ${maxRetries} attempts`);
+        
+        // Show user-friendly error message
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: rgba(255, 0, 0, 0.8);
+          color: white;
+          padding: 20px;
+          border-radius: 5px;
+          text-align: center;
+          z-index: 1000;
+        `;
+        errorDiv.innerHTML = `
+          <h3>Connection Failed</h3>
+          <p>Unable to connect to ${peerId}</p>
+          <p>Please check your network connection</p>
+          <button onclick="this.parentElement.remove()">Close</button>
+        `;
+        videoElement.parentElement.appendChild(errorDiv);
       }
       
       return null;
@@ -377,9 +601,12 @@ document.addEventListener("DOMContentLoaded", () => {
     video.id = "video";
     video.autoplay = true;
     video.playsInline = true;
+    video.muted = true;
     video.controls = true;
-    video.style.width = "640px";
-    video.style.height = "360px";
+    video.style.width = isMobile ? "100%" : "640px";
+    video.style.height = isMobile ? "auto" : "360px";
+    video.style.maxWidth = "100%";
+    video.style.backgroundColor = "#000";
     videoContainer.appendChild(video);
 
     const streamUrl = streamURLs[earti][cameraId];
@@ -393,12 +620,17 @@ document.addEventListener("DOMContentLoaded", () => {
     videoContainer.innerHTML = "";
     controlsContainer.innerHTML = "";
 
-    // Create containers for both cameras
     const bothContainer = document.createElement("div");
     bothContainer.style.display = "flex";
     bothContainer.style.gap = "20px";
     bothContainer.style.flexWrap = "wrap";
     bothContainer.style.justifyContent = "center";
+    
+    // Mobile-friendly responsive layout
+    if (isMobile) {
+      bothContainer.style.flexDirection = "column";
+      bothContainer.style.gap = "10px";
+    }
 
     // Camera 1 container
     const cam1Container = document.createElement("div");
@@ -415,9 +647,12 @@ document.addEventListener("DOMContentLoaded", () => {
     video1.id = "video1";
     video1.autoplay = true;
     video1.playsInline = true;
+    video1.muted = true;
     video1.controls = true;
-    video1.style.width = "480px";
-    video1.style.height = "270px";
+    video1.style.width = isMobile ? "100%" : "480px";
+    video1.style.height = isMobile ? "auto" : "270px";
+    video1.style.maxWidth = "100%";
+    video1.style.backgroundColor = "#000";
 
     cam1Container.appendChild(cam1Title);
     cam1Container.appendChild(video1);
@@ -437,9 +672,12 @@ document.addEventListener("DOMContentLoaded", () => {
     video2.id = "video2";
     video2.autoplay = true;
     video2.playsInline = true;
+    video2.muted = true;
     video2.controls = true;
-    video2.style.width = "480px";
-    video2.style.height = "270px";
+    video2.style.width = isMobile ? "100%" : "480px";
+    video2.style.height = isMobile ? "auto" : "270px";
+    video2.style.maxWidth = "100%";
+    video2.style.backgroundColor = "#000";
 
     cam2Container.appendChild(cam2Title);
     cam2Container.appendChild(video2);
@@ -448,23 +686,26 @@ document.addEventListener("DOMContentLoaded", () => {
     bothContainer.appendChild(cam2Container);
     videoContainer.appendChild(bothContainer);
 
-    // Setup WebRTC for both cameras with staggered connection
-    console.log("Setting up both cameras with staggered connection...");
+    // Enhanced mobile connection strategy
+    console.log("Setting up both cameras with mobile-optimized connection...");
     
     try {
-      // Connect to first camera
-      const pc1Promise = setupWebRTCStreamForVideo(streamURLs[earti].cam1, video1, "cam1");
+      if (isMobile) {
+        // For mobile, connect cameras sequentially to reduce resource contention
+        console.log("Mobile detected - connecting cameras sequentially");
+        
+        await setupWebRTCStreamForVideo(streamURLs[earti].cam1, video1, "cam1");
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s between connections
+        await setupWebRTCStreamForVideo(streamURLs[earti].cam2, video2, "cam2");
+      } else {
+        // For desktop, connect in parallel with staggered timing
+        const pc1Promise = setupWebRTCStreamForVideo(streamURLs[earti].cam1, video1, "cam1");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const pc2Promise = setupWebRTCStreamForVideo(streamURLs[earti].cam2, video2, "cam2");
+        
+        await Promise.all([pc1Promise, pc2Promise]);
+      }
       
-      // Wait a bit before connecting to second camera to reduce resource contention
-      await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay
-      
-      // Connect to second camera
-      const pc2Promise = setupWebRTCStreamForVideo(streamURLs[earti].cam2, video2, "cam2");
-      
-      // Wait for both connections to complete
-      await Promise.all([pc1Promise, pc2Promise]);
-      
-      // Add controls for both cameras
       controlsContainer.appendChild(createDPad("Camera 1"));
       controlsContainer.appendChild(createDPad("Camera 2"));
       
@@ -478,7 +719,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const earti = eartiSelect ? eartiSelect.value : "earti1";
     const selection = cameraSelect.value;
 
-    console.log(`Loading cameras: ${earti} - ${selection}`);
+    console.log(`Loading cameras: ${earti} - ${selection} (Mobile: ${isMobile})`);
+
+    // Show loading indicator
+    videoContainer.innerHTML = '<div style="text-align: center; padding: 20px;">Loading cameras...</div>';
 
     if (selection === "both") {
       await setupBothCameras(earti);
@@ -500,9 +744,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   cameraSelect.addEventListener("change", loadCameras);
 
-  // Cleanup on page unload
+  // Enhanced cleanup on page unload
   window.addEventListener("beforeunload", cleanupAllConnections);
+  window.addEventListener("pagehide", cleanupAllConnections);
+  
+  // Mobile-specific event handlers
+  if (isMobile) {
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        console.log("Page hidden - maintaining connections");
+      } else {
+        console.log("Page visible - checking connections");
+        // Could add connection health check here
+      }
+    });
+  }
 
   // Initial load
+  console.log("Starting initial camera load...");
   loadCameras();
 });
