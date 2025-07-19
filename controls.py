@@ -113,7 +113,7 @@ async def handleCommand(websocket, path):
             elif command == 'r': # Right arrow
                 panCW()
 
-            sleep(0.05)  # Delay after action
+            # sleep(0.1)  # Delay after action
         except json.JSONDecodeError:
             print("Received invalid JSON")
 

@@ -1,6 +1,8 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const wsURL = `wss://${window.location.hostname}`;
-  const socket = new WebSocket(wsURL);
+let socket = null; 
+
+function connectWebSocket() {
+  const wsURL = `wss://ws.streaming.earti.dev/`;
+  socket = new WebSocket(wsURL);
 
   socket.addEventListener("open", () => {
     console.log("WebSocket connected");
@@ -12,8 +14,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   socket.addEventListener("close", () => {
     console.warn("WebSocket closed, attempting reconnect...");
-    // optional: reconnect logic
+    setTimeout(connectWebSocket, 2000);
   });
+
+  socket.addEventListener("error", (err) => {
+    console.error("WebSocket error:", err);
+    socket.close();
+  });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  connectWebSocket();
 
   const cameraSelect = document.getElementById("cameraSelect");
   const videoContainer = document.getElementById("videoContainer");
@@ -119,7 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function sendCommand(data) {
     const msg = JSON.stringify(data);
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(msg);
     } else if (socket.readyState === WebSocket.CONNECTING) {
       console.log("Socket connecting, queuing message");
@@ -147,48 +158,77 @@ document.addEventListener("DOMContentLoaded", () => {
     return presetSelect;
   }
 
-  function createDPad(label) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "control-group";
-    const title = document.createElement("h3");
-    title.textContent = label;
+function createDPad(label) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "control-group";
 
-    const dpadWrapper = document.createElement("div");
-    dpadWrapper.className = "dpad-wrapper";
+  const title = document.createElement("h3");
+  title.textContent = label;
 
-    const dpad = document.createElement("div");
-    dpad.className = "dpad";
+  const dpadWrapper = document.createElement("div");
+  dpadWrapper.className = "dpad-wrapper";
 
-    const directions = [
-      "", "↑", "",
-      "←", "", "→",
-      "", "↓", ""
-    ];
+  const dpad = document.createElement("div");
+  dpad.className = "dpad";
 
-    directions.forEach(dir => {
-      const btn = document.createElement("button");
-      if (dir === "") {
-        btn.className = "empty";
-        btn.disabled = true;
-      } else {
-        btn.textContent = dir;
-        btn.style.touchAction = "manipulation"; // Better mobile touch handling
-        btn.addEventListener("click", () => {
-          console.log(`Move ${label} ${dir}`);
-          // TODO: Send command to Raspberry Pi
+  const directions = [
+    "", "↑", "",
+    "←", "", "→",
+    "", "↓", ""
+  ];
+
+  directions.forEach(dir => {
+    const btn = document.createElement("button");
+    let intervalId = null;
+
+    if (dir === "") {
+      btn.className = "empty";
+      btn.disabled = true;
+    } else {
+      btn.textContent = dir;
+      btn.style.touchAction = "manipulation";
+
+      // Start sending repeatedly when pressed
+      const startSending = () => {
+        sendCommand({ command: dir, camera: label });
+        intervalId = setInterval(() => {
           sendCommand({ command: dir, camera: label });
-        });
-        
-      }
-      dpad.appendChild(btn);
-    });
+        }, 100);
+      };
 
-    dpadWrapper.appendChild(dpad);
-    dpadWrapper.appendChild(createPresetSelect(label));
-    wrapper.appendChild(title);
-    wrapper.appendChild(dpadWrapper);
-    return wrapper;
-  }
+      // Stop sending when released
+      const stopSending = () => {
+        if (intervalId !== null) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      };
+
+      // Mouse events
+      btn.addEventListener("mousedown", startSending);
+      btn.addEventListener("mouseup", stopSending);
+      btn.addEventListener("mouseleave", stopSending);
+
+      // Touch events
+      btn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        startSending();
+      });
+      btn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        stopSending();
+      });
+    }
+
+    dpad.appendChild(btn);
+  });
+
+  dpadWrapper.appendChild(dpad);
+  dpadWrapper.appendChild(createPresetSelect(label));
+  wrapper.appendChild(title);
+  wrapper.appendChild(dpadWrapper);
+  return wrapper;
+}
 
   function cleanupPeerConnection(peerId) {
     if (activePeers.has(peerId)) {
