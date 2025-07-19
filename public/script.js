@@ -1,4 +1,20 @@
 document.addEventListener("DOMContentLoaded", () => {
+  const wsURL = `wss://${window.location.hostname}`;
+  const socket = new WebSocket(wsURL);
+
+  socket.addEventListener("open", () => {
+    console.log("WebSocket connected");
+  });
+
+  socket.addEventListener("message", (event) => {
+    console.log("From Pi:", event.data);
+  });
+
+  socket.addEventListener("close", () => {
+    console.warn("WebSocket closed, attempting reconnect...");
+    // optional: reconnect logic
+  });
+
   const cameraSelect = document.getElementById("cameraSelect");
   const videoContainer = document.getElementById("videoContainer");
   const controlsContainer = document.getElementById("controlsContainer");
@@ -101,6 +117,18 @@ document.addEventListener("DOMContentLoaded", () => {
     ]
   };
 
+  function sendCommand(data) {
+    const msg = JSON.stringify(data);
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(msg);
+    } else if (socket.readyState === WebSocket.CONNECTING) {
+      console.log("Socket connecting, queuing message");
+      messageQueue.push(msg);
+    } else {
+      console.warn("WebSocket not open or closed, cannot send");
+    }
+  }
+
   function createPresetSelect(label) {
     const presetSelect = document.createElement("select");
     presetSelect.className = "preset-select";
@@ -113,7 +141,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     presetSelect.addEventListener("change", () => {
       console.log(`${label} preset selected:`, presetSelect.value);
-      // TODO: Send preset change to Raspberry Pi
+      // **TODO: Send preset change to Raspberry Pi
+      sendCommand({ command: presetSelect.value, camera: label });
     });
     return presetSelect;
   }
@@ -147,7 +176,9 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.addEventListener("click", () => {
           console.log(`Move ${label} ${dir}`);
           // TODO: Send command to Raspberry Pi
+          sendCommand({ command: dir, camera: label });
         });
+        
       }
       dpad.appendChild(btn);
     });
