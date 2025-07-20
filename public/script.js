@@ -1,4 +1,85 @@
+let socket = null;
+let messageQueue = [];
+let connectionAttempts = 0;
+const maxReconnectAttempts = 5;
+
+function connectWebSocket() {
+  const wsURL = `wss://ws.earti.dev/`;
+
+  console.log(`Attempting WebSocket connection to ${wsURL} (attempt ${connectionAttempts + 1})`);
+  
+  try {
+    socket = new WebSocket(wsURL);
+    
+    socket.addEventListener("open", () => {
+      console.log("WebSocket connected successfully");
+      connectionAttempts = 0; // Reset counter on successful connection
+      
+      // Send any queued messages
+      while (messageQueue.length > 0) {
+        const message = messageQueue.shift();
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(message);
+        }
+      }
+    });
+
+    socket.addEventListener("message", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("From Pi:", data);
+        
+        // Handle different message types
+        if (data.status === "connected") {
+          console.log("Successfully connected to EARTI controls");
+        } else if (data.status === "executed") {
+          console.log(`Command executed: ${data.command} for ${data.camera}`);
+        } else if (data.status === "error") {
+          console.error("Pi error:", data.message);
+        }
+      } catch (e) {
+        console.log("Raw message from Pi:", event.data);
+      }
+    });
+
+    socket.addEventListener("close", (event) => {
+      console.warn(`WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`);
+      
+      // Only attempt reconnect if we haven't exceeded max attempts
+      if (connectionAttempts < maxReconnectAttempts) {
+        connectionAttempts++;
+        const delay = Math.min(1000 * Math.pow(2, connectionAttempts), 10000); // Exponential backoff, max 10s
+        console.log(`Attempting reconnect in ${delay}ms...`);
+        setTimeout(connectWebSocket, delay);
+      } else {
+        console.error("Max reconnection attempts reached. Please refresh the page.");
+      }
+    });
+
+    socket.addEventListener("error", (err) => {
+      console.error("WebSocket error:", err);
+      
+      // Close the socket to trigger reconnect logic
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.close();
+      }
+    });
+    
+  } catch (error) {
+    console.error("Failed to create WebSocket:", error);
+    
+    // Retry connection after delay
+    if (connectionAttempts < maxReconnectAttempts) {
+      connectionAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, connectionAttempts), 10000);
+      setTimeout(connectWebSocket, delay);
+    }
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  connectWebSocket();
+
   const cameraSelect = document.getElementById("cameraSelect");
   const videoContainer = document.getElementById("videoContainer");
   const controlsContainer = document.getElementById("controlsContainer");
@@ -101,6 +182,25 @@ document.addEventListener("DOMContentLoaded", () => {
     ]
   };
 
+  function sendCommand(data) {
+    const msg = JSON.stringify(data);
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(msg);
+      console.log("Sent command: ", data);
+    } else if (socket && socket.readyState === WebSocket.CONNECTING) {
+      console.log("Socket connecting, queuing message");
+      messageQueue.push(msg);
+    } else {
+      console.warn("WebSocket not open or closed, cannot send");
+      messageQueue.push(msg);
+
+      // Try reconnecting if not already trying 
+      if (!socket || socket.readyState === WebSocket.CLOSED) {
+        connectWebSocket();
+      }
+    }
+  }
+
   function createPresetSelect(label) {
     const presetSelect = document.createElement("select");
     presetSelect.className = "preset-select";
@@ -113,51 +213,83 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     presetSelect.addEventListener("change", () => {
       console.log(`${label} preset selected:`, presetSelect.value);
-      // TODO: Send preset change to Raspberry Pi
+      // **TODO: Send preset change to Raspberry Pi
+      sendCommand({ command: presetSelect.value, camera: label });
     });
     return presetSelect;
   }
 
-  function createDPad(label) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "control-group";
-    const title = document.createElement("h3");
-    title.textContent = label;
+function createDPad(label) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "control-group";
 
-    const dpadWrapper = document.createElement("div");
-    dpadWrapper.className = "dpad-wrapper";
+  const title = document.createElement("h3");
+  title.textContent = label;
 
-    const dpad = document.createElement("div");
-    dpad.className = "dpad";
+  const dpadWrapper = document.createElement("div");
+  dpadWrapper.className = "dpad-wrapper";
 
-    const directions = [
-      "", "↑", "",
-      "←", "", "→",
-      "", "↓", ""
-    ];
+  const dpad = document.createElement("div");
+  dpad.className = "dpad";
 
-    directions.forEach(dir => {
-      const btn = document.createElement("button");
-      if (dir === "") {
-        btn.className = "empty";
-        btn.disabled = true;
-      } else {
-        btn.textContent = dir;
-        btn.style.touchAction = "manipulation"; // Better mobile touch handling
-        btn.addEventListener("click", () => {
-          console.log(`Move ${label} ${dir}`);
-          // TODO: Send command to Raspberry Pi
-        });
-      }
-      dpad.appendChild(btn);
-    });
+  const directions = [
+    "", "↑", "",
+    "←", "", "→",
+    "", "↓", ""
+  ];
 
-    dpadWrapper.appendChild(dpad);
-    dpadWrapper.appendChild(createPresetSelect(label));
-    wrapper.appendChild(title);
-    wrapper.appendChild(dpadWrapper);
-    return wrapper;
-  }
+  directions.forEach(dir => {
+    const btn = document.createElement("button");
+    let intervalId = null;
+
+    if (dir === "") {
+      btn.className = "empty";
+      btn.disabled = true;
+    } else {
+      btn.textContent = dir;
+      btn.style.touchAction = "manipulation";
+
+      // Start sending repeatedly when pressed
+      const startSending = () => {
+        sendCommand({ command: dir, camera: label });
+        intervalId = setInterval(() => {
+          sendCommand({ command: dir, camera: label });
+        }, 150);
+      };
+
+      // Stop sending when released
+      const stopSending = () => {
+        if (intervalId !== null) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      };
+
+      // Mouse events
+      btn.addEventListener("mousedown", startSending);
+      btn.addEventListener("mouseup", stopSending);
+      btn.addEventListener("mouseleave", stopSending);
+
+      // Touch events
+      btn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        startSending();
+      });
+      btn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        stopSending();
+      });
+    }
+
+    dpad.appendChild(btn);
+  });
+
+  dpadWrapper.appendChild(dpad);
+  dpadWrapper.appendChild(createPresetSelect(label));
+  wrapper.appendChild(title);
+  wrapper.appendChild(dpadWrapper);
+  return wrapper;
+}
 
   function cleanupPeerConnection(peerId) {
     if (activePeers.has(peerId)) {

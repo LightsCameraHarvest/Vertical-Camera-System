@@ -3,18 +3,21 @@
 import pigpio
 import RPi.GPIO as GPIO
 from time import sleep
+import asyncio
+import websockets
+import json
 
 # Pin definitions
 ena_pin = 17
 dir_pin = 27
 stp_pin = 22
-motor_step_size = 200
+motor_step_size = 100
 max_steps = 1000  # ***NEED TO TEST!!!***
 
 servo_pin = 13  # or 19
 min_pulse = 1000
 max_pulse = 2000
-servo_pos = max_pulse // 2
+servo_pos = (max_pulse-min_pulse) // 2
 servo_step_size = 20
 limit_pin = 26  # or 26
 # because we have no bottom limit pin, we need to keep track of steps
@@ -93,28 +96,33 @@ def panCW():
     servo_pos = min(max_pulse, servo_pos + servo_step_size)
     pi.set_servo_pulsewidth(servo_pin, servo_pos)
 
-def getCommand():
-    try:
-        cmd = input("Enter command (u/d/l/r): ")
-        if cmd:
-            return cmd[0].lower()
-    except EOFError:
-        pass
-    return None
+# WebSocket handler
+async def handleCommand(websocket, path):
+    async for message in websocket:
+        try:
+            data = json.loads(message)
+            command = data.get('command')
+            camera = data.get('camera')
 
-def mainLoop():
-    try:
-        while True:
-            cmd = getCommand()
-            if cmd == 'u':
+            if command == 'u': # Up arrow
                 stepUp()
-            elif cmd == 'd':
+            elif command == 'd': # Down arrow
                 stepDown()
-            elif cmd == 'l':
+            elif command == 'l': # Left arrow
                 panCCW()
-            elif cmd == 'r':
+            elif command == 'r': # Right arrow
                 panCW()
-            sleep(0.05)  # 50 ms delay
+
+            # sleep(0.1)  # Delay after action
+        except json.JSONDecodeError:
+            print("Received invalid JSON")
+
+# Run the WebSocket server
+async def main():
+    try:
+        async with websockets.serve(handleCommand, "0.0.0.0", 8765):
+            print("WebSocket server running...")
+            await asyncio.Future()  # Run forever
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
@@ -126,4 +134,4 @@ def mainLoop():
                 print(f"Error during pigpio cleanup: {e}")
 
 if __name__ == "__main__":
-    mainLoop()
+    asyncio.run(main())
