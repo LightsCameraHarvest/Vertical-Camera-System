@@ -1,26 +1,80 @@
-let socket = null; 
+let socket = null;
+let messageQueue = [];
+let connectionAttempts = 0;
+const maxReconnectAttempts = 5;
 
 function connectWebSocket() {
-  const wsURL = `wss://ws.streaming.earti.dev/`;
-  socket = new WebSocket(wsURL);
+  const wsURL = `wss://ws.earti.dev/`;
 
-  socket.addEventListener("open", () => {
-    console.log("WebSocket connected");
-  });
+  console.log(`Attempting WebSocket connection to ${wsURL} (attempt ${connectionAttempts + 1})`);
+  
+  try {
+    socket = new WebSocket(wsURL);
+    
+    socket.addEventListener("open", () => {
+      console.log("WebSocket connected successfully");
+      connectionAttempts = 0; // Reset counter on successful connection
+      
+      // Send any queued messages
+      while (messageQueue.length > 0) {
+        const message = messageQueue.shift();
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(message);
+        }
+      }
+    });
 
-  socket.addEventListener("message", (event) => {
-    console.log("From Pi:", event.data);
-  });
+    socket.addEventListener("message", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        console.log("From Pi:", data);
+        
+        // Handle different message types
+        if (data.status === "connected") {
+          console.log("Successfully connected to EARTI controls");
+        } else if (data.status === "executed") {
+          console.log(`Command executed: ${data.command} for ${data.camera}`);
+        } else if (data.status === "error") {
+          console.error("Pi error:", data.message);
+        }
+      } catch (e) {
+        console.log("Raw message from Pi:", event.data);
+      }
+    });
 
-  socket.addEventListener("close", () => {
-    console.warn("WebSocket closed, attempting reconnect...");
-    setTimeout(connectWebSocket, 2000);
-  });
+    socket.addEventListener("close", (event) => {
+      console.warn(`WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`);
+      
+      // Only attempt reconnect if we haven't exceeded max attempts
+      if (connectionAttempts < maxReconnectAttempts) {
+        connectionAttempts++;
+        const delay = Math.min(1000 * Math.pow(2, connectionAttempts), 10000); // Exponential backoff, max 10s
+        console.log(`Attempting reconnect in ${delay}ms...`);
+        setTimeout(connectWebSocket, delay);
+      } else {
+        console.error("Max reconnection attempts reached. Please refresh the page.");
+      }
+    });
 
-  socket.addEventListener("error", (err) => {
-    console.error("WebSocket error:", err);
-    socket.close();
-  });
+    socket.addEventListener("error", (err) => {
+      console.error("WebSocket error:", err);
+      
+      // Close the socket to trigger reconnect logic
+      if (socket.readyState === WebSocket.CONNECTING) {
+        socket.close();
+      }
+    });
+    
+  } catch (error) {
+    console.error("Failed to create WebSocket:", error);
+    
+    // Retry connection after delay
+    if (connectionAttempts < maxReconnectAttempts) {
+      connectionAttempts++;
+      const delay = Math.min(1000 * Math.pow(2, connectionAttempts), 10000);
+      setTimeout(connectWebSocket, delay);
+    }
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -132,11 +186,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const msg = JSON.stringify(data);
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(msg);
-    } else if (socket.readyState === WebSocket.CONNECTING) {
+      console.log("Sent command: ", data);
+    } else if (socket && socket.readyState === WebSocket.CONNECTING) {
       console.log("Socket connecting, queuing message");
       messageQueue.push(msg);
     } else {
       console.warn("WebSocket not open or closed, cannot send");
+      messageQueue.push(msg);
+
+      // Try reconnecting if not already trying 
+      if (!socket || socket.readyState === WebSocket.CLOSED) {
+        connectWebSocket();
+      }
     }
   }
 
@@ -193,7 +254,7 @@ function createDPad(label) {
         sendCommand({ command: dir, camera: label });
         intervalId = setInterval(() => {
           sendCommand({ command: dir, camera: label });
-        }, 100);
+        }, 150);
       };
 
       // Stop sending when released

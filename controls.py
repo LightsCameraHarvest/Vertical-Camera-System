@@ -11,13 +11,13 @@ import json
 ena_pin = 17
 dir_pin = 27
 stp_pin = 22
-motor_step_size = 200
+motor_step_size = 100
 max_steps = 1000  # ***NEED TO TEST!!!***
 
 servo_pin = 13  # or 19
 min_pulse = 1000
 max_pulse = 2000
-servo_pos = max_pulse // 2
+servo_pos = (max_pulse-min_pulse) // 2
 servo_step_size = 20
 limit_pin = 26  # or 26
 # because we have no bottom limit pin, we need to keep track of steps
