@@ -583,6 +583,9 @@ function createDPad(label) {
         offerOptions.voiceActivityDetection = false; // Reduce processing
       }
       
+      pc.addTransceiver('video', { direction: 'recvonly' });
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+
       const offer = await pc.createOffer(offerOptions);
       await pc.setLocalDescription(offer);
 
