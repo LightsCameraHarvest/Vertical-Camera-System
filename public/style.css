@@ -13,6 +13,7 @@ body {
 }
 
 .container {
+  display: none;
   text-align: center;
   padding: 1rem;
   max-width: 100%;
@@ -207,6 +208,7 @@ video {
 /* Mobile phones (portrait) */
 @media screen and (max-width: 480px) {
   .container {
+    display: none;
     padding: 0.5rem;
   }
   
@@ -254,6 +256,7 @@ video {
 /* Mobile phones (landscape) and small tablets */
 @media screen and (min-width: 481px) and (max-width: 768px) {
   .container {
+    display: none;
     padding: 1rem;
   }
   
@@ -283,6 +286,7 @@ video {
 /* Tablets (portrait) */
 @media screen and (min-width: 769px) and (max-width: 1024px) {
   .container {
+    display: none;
     padding: 1.5rem;
   }
   
@@ -302,6 +306,7 @@ video {
 /* Desktop and tablets (landscape) */
 @media screen and (min-width: 1025px) {
   .container {
+    display: none;
     padding: 2rem;
     max-width: 1400px;
   }
@@ -322,6 +327,7 @@ video {
 /* Large desktop screens */
 @media screen and (min-width: 1440px) {
   .container {
+    display: none;
     padding: 3rem;
     max-width: 1600px;
   }
@@ -348,6 +354,7 @@ video {
 /* Orientation-specific styles */
 @media screen and (orientation: landscape) and (max-height: 500px) {
   .container {
+    display: none;
     padding: 0.5rem;
   }
   
