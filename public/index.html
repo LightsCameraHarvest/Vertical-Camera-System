@@ -9,6 +9,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
   <!-- Firebase Authentication -->
   <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+  <!-- Firebase Firestore -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore-compat.js"></script>
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyDHVRDEvVc1qEat2Kdc8axh4NLhgj9QaPg",
@@ -19,53 +21,211 @@
   </script>
 </head>
 <body>
-  <!-- Will change later -->
-  <button id="signInBtn">Sign in with Google</button>
-  <button id="signOutBtn" style="display: none;">Sign out</button>
-  <p id="userInfo"></p>
+  <!-- Authentication UI -->
+  <div id="authContainer" style="text-align: center; padding: 2rem;">
+    <button id="signInBtn">Sign in with Google</button>
+    <button id="signOutBtn" style="display: none;">Sign out</button>
+    <p id="userInfo"></p>
+    <div id="loadingAuth" style="display: none; margin: 1rem 0;">
+      <div class="loading-indicator"></div>
+      <p>Checking authentication and authorization...</p>
+    </div>
+    <div id="unauthorizedMessage" style="display: none; margin: 1rem 0; padding: 1rem; background: #ffebee; border: 1px solid #f44336; border-radius: 4px; color: #c62828;">
+      <h3>Access Denied</h3>
+      <p>Your email address is not authorized to access this system. Please contact the administrator if you believe this is an error.</p>
+      <p id="unauthorizedEmail" style="font-weight: bold;"></p>
+    </div>
+  </div>
 
-  <div class="container">
+  <!-- Main content -->
+  <div class="container" id="mainContainer" style="display: none;">
+    <div style="text-align: center; margin-bottom: 1rem;">
+      <button id="signOutBtn2">Sign out</button>
+      <p id="userInfo2"></p>
+    </div>
+    
     <h1>Select your EARTI</h1>
     <button onclick="selectEarti('earti1')">EARTI 1</button>
     <button onclick="selectEarti('earti2')">EARTI 2</button>
   </div>
+
   <script>
-    function selectEarti(eariId) {
-      localStorage.setItem("selectedEarti", eariId);
+    // Initialize Firebase services
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const provider = new firebase.auth.GoogleAuthProvider();
+
+    // UI elements
+    const signInBtn = document.getElementById("signInBtn");
+    const signOutBtn = document.getElementById("signOutBtn");
+    const signOutBtn2 = document.getElementById("signOutBtn2");
+    const userInfo = document.getElementById("userInfo");
+    const userInfo2 = document.getElementById("userInfo2");
+    const authContainer = document.getElementById("authContainer");
+    const mainContainer = document.getElementById("mainContainer");
+    const loadingAuth = document.getElementById("loadingAuth");
+    const unauthorizedMessage = document.getElementById("unauthorizedMessage");
+    const unauthorizedEmail = document.getElementById("unauthorizedEmail");
+
+    // Hardcoded authorized emails (you can also store these in Firestore)
+    const AUTHORIZED_EMAILS = [
+      'your-email@gmail.com',
+      'admin@yourdomain.com',
+      'authorized-user@example.com'
+      // Add more authorized emails here
+    ];
+
+    // Show loading initially
+    loadingAuth.style.display = "block";
+    signInBtn.style.display = "none";
+
+    // Function to check if email is authorized
+    async function isEmailAuthorized(email) {
+      // First check hardcoded list
+      if (AUTHORIZED_EMAILS.includes(email.toLowerCase())) {
+        return true;
+      }
+
+      // Optionally, also check Firestore database
+      try {
+        const doc = await db.collection('authorized_users').doc(email.toLowerCase()).get();
+        return doc.exists && doc.data().authorized === true;
+      } catch (error) {
+        console.error('Error checking authorization in database:', error);
+        // Fallback to hardcoded list only
+        return false;
+      }
+    }
+
+    // Function to log unauthorized access attempts
+    async function logUnauthorizedAccess(user) {
+      try {
+        await db.collection('unauthorized_access').add({
+          email: user.email,
+          displayName: user.displayName,
+          uid: user.uid,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+          userAgent: navigator.userAgent,
+          ip: 'client-side' // You'd need server-side logging for real IP
+        });
+        console.log('Logged unauthorized access attempt');
+      } catch (error) {
+        console.error('Error logging unauthorized access:', error);
+      }
+    }
+
+    function selectEarti(eartiId) {
+      localStorage.setItem("selectedEarti", eartiId);
       window.location.href = "viewer.html";
     }
 
-    const signInBtn = document.getElementById("signInBtn");
-    const signOutBtn = document.getElementById("signOutBtn");
-    const userInfo = document.getElementById("userInfo");
-    const container = document.querySelector(".container");
-
-    const auth = firebase.auth();
-    const provider = new firebase.auth.GoogleAuthProvider();
-
-    signInBtn.onclick = () => {
+    // Sign in handler
+    const signInHandler = () => {
+      loadingAuth.style.display = "block";
+      signInBtn.style.display = "none";
+      unauthorizedMessage.style.display = "none";
+      
       auth.signInWithPopup(provider).catch(error => {
+        console.error("Sign-in failed:", error);
         alert("Sign-in failed: " + error.message);
+        loadingAuth.style.display = "none";
+        signInBtn.style.display = "inline-block";
       });
     };
 
-    signOutBtn.onclick = () => {
-      auth.signOut();
+    // Sign out handler
+    const signOutHandler = () => {
+      auth.signOut().then(() => {
+        localStorage.removeItem("selectedEarti");
+        localStorage.removeItem("userAuthorized");
+      });
     };
 
-    auth.onAuthStateChanged(user => {
+    signInBtn.onclick = signInHandler;
+    signOutBtn.onclick = signOutHandler;
+    signOutBtn2.onclick = signOutHandler;
+
+    // Authentication state listener
+    auth.onAuthStateChanged(async (user) => {
+      loadingAuth.style.display = "none";
+      
       if (user) {
-        // Signed in
-        signInBtn.style.display = "none";
-        signOutBtn.style.display = "inline-block";
-        userInfo.textContent = `Signed in as ${user.displayName}`;
-        container.style.display = "block";
+        console.log("User authenticated:", user.email);
+        
+        // Check if user is authorized
+        const authorized = await isEmailAuthorized(user.email);
+        
+        if (authorized) {
+          console.log("User authorized:", user.email);
+          
+          // Store authorization status
+          localStorage.setItem("userAuthorized", "true");
+          localStorage.setItem("authorizedEmail", user.email);
+          
+          // Show main content
+          authContainer.style.display = "none";
+          mainContainer.style.display = "block";
+          
+          // Update UI
+          userInfo2.textContent = `Signed in as ${user.displayName} (${user.email})`;
+          signOutBtn2.style.display = "inline-block";
+          
+        } else {
+          console.warn("User not authorized:", user.email);
+          
+          // Log unauthorized access attempt
+          await logUnauthorizedAccess(user);
+          
+          // Show unauthorized message
+          authContainer.style.display = "block";
+          mainContainer.style.display = "none";
+          signInBtn.style.display = "none";
+          signOutBtn.style.display = "inline-block";
+          unauthorizedMessage.style.display = "block";
+          unauthorizedEmail.textContent = user.email;
+          userInfo.textContent = `Signed in as ${user.displayName}`;
+          
+          // Clear any stored authorization
+          localStorage.removeItem("userAuthorized");
+          localStorage.removeItem("authorizedEmail");
+          localStorage.removeItem("selectedEarti");
+        }
       } else {
         // Not signed in
+        console.log("User not authenticated");
+        authContainer.style.display = "block";
+        mainContainer.style.display = "none";
         signInBtn.style.display = "inline-block";
         signOutBtn.style.display = "none";
+        signOutBtn2.style.display = "none";
+        unauthorizedMessage.style.display = "none";
         userInfo.textContent = "";
-        container.style.display = "none"; // hide EARTI selection
+        userInfo2.textContent = "";
+        
+        // Clear stored data
+        localStorage.removeItem("userAuthorized");
+        localStorage.removeItem("authorizedEmail");
+        localStorage.removeItem("selectedEarti");
+      }
+    });
+
+    // Additional security: Check authorization periodically
+    setInterval(async () => {
+      const user = auth.currentUser;
+      if (user && mainContainer.style.display === "block") {
+        const stillAuthorized = await isEmailAuthorized(user.email);
+        if (!stillAuthorized) {
+          console.warn("User authorization revoked:", user.email);
+          alert("Your access has been revoked. You will be signed out.");
+          auth.signOut();
+        }
+      }
+    }, 60000); // Check every minute
+
+    // Prevent unauthorized access via browser developer tools
+    window.addEventListener('beforeunload', () => {
+      if (!localStorage.getItem("userAuthorized")) {
+        localStorage.clear();
       }
     });
   </script>
