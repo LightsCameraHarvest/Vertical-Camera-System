@@ -13,9 +13,18 @@ body {
 }
 
 .container {
-  display: none;
+  display: none; /* Hidden by default until authentication */
   text-align: center;
   padding: 1rem;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Auth container - visible by default */
+#authContainer {
+  display: block;
+  text-align: center;
+  padding: 2rem;
   max-width: 100%;
   margin: 0 auto;
 }
@@ -37,6 +46,21 @@ h3 {
 .camera-title {
   margin: 0 0 0.5rem 0;
   font-size: 1.1rem;
+}
+
+/* Camera selector styles */
+.camera-selector {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.camera-selector label {
+  display: inline-block;
+  margin-right: 0.5rem;
+  font-weight: 500;
 }
 
 /* Form controls */
@@ -61,6 +85,12 @@ button:hover, select:hover {
 
 button:active, select:active {
   transform: translateY(0);
+}
+
+button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Video container styles */
@@ -101,6 +131,28 @@ video {
   height: auto;
   background: #f0f0f0;
   display: block;
+}
+
+/* Play button styles */
+.play-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 24px;
+  font-size: 16px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  z-index: 1000;
+  font-family: Arial, sans-serif;
+  touch-action: manipulation;
+}
+
+.play-button:hover {
+  background: rgba(0, 0, 0, 0.9);
 }
 
 /* Controls container */
@@ -187,6 +239,7 @@ video {
   border-top: 4px solid #4bb5a5;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+  margin: 0 auto;
 }
 
 @keyframes spin {
@@ -203,13 +256,32 @@ video {
   border-left: 4px solid #d32f2f;
 }
 
+/* User info styles */
+#userInfo, #userInfo2 {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+/* Navigation styles */
+#backBtn {
+  background: #666;
+}
+
+#backBtn:hover {
+  background: #555;
+}
+
 /* Responsive breakpoints */
 
 /* Mobile phones (portrait) */
 @media screen and (max-width: 480px) {
   .container {
-    display: none;
     padding: 0.5rem;
+  }
+  
+  #authContainer {
+    padding: 1rem;
   }
   
   h1 {
@@ -251,13 +323,21 @@ video {
     min-width: 100px;
     font-size: 0.9rem;
   }
+  
+  .camera-selector {
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+  }
 }
 
 /* Mobile phones (landscape) and small tablets */
 @media screen and (min-width: 481px) and (max-width: 768px) {
   .container {
-    display: none;
     padding: 1rem;
+  }
+  
+  #authContainer {
+    padding: 1.5rem;
   }
   
   h1 {
@@ -286,7 +366,6 @@ video {
 /* Tablets (portrait) */
 @media screen and (min-width: 769px) and (max-width: 1024px) {
   .container {
-    display: none;
     padding: 1.5rem;
   }
   
@@ -306,7 +385,6 @@ video {
 /* Desktop and tablets (landscape) */
 @media screen and (min-width: 1025px) {
   .container {
-    display: none;
     padding: 2rem;
     max-width: 1400px;
   }
@@ -327,7 +405,6 @@ video {
 /* Large desktop screens */
 @media screen and (min-width: 1440px) {
   .container {
-    display: none;
     padding: 3rem;
     max-width: 1600px;
   }
@@ -354,8 +431,11 @@ video {
 /* Orientation-specific styles */
 @media screen and (orientation: landscape) and (max-height: 500px) {
   .container {
-    display: none;
     padding: 0.5rem;
+  }
+  
+  #authContainer {
+    padding: 1rem;
   }
   
   h1 {
@@ -383,6 +463,10 @@ video {
 /* Print styles */
 @media print {
   .controls-container {
+    display: none;
+  }
+  
+  #authContainer {
     display: none;
   }
   
@@ -449,6 +533,14 @@ video {
   .error-message {
     background: #2d1b1b;
     color: #ffcdd2;
+  }
+  
+  .camera-selector {
+    background: rgba(45, 55, 72, 0.8);
+  }
+  
+  #userInfo, #userInfo2 {
+    color: #cbd5e0;
   }
 }
 

@@ -5,9 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>EARTI Media Viewer</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- Firebase App (core SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
+  <!-- Firebase Authentication -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDHVRDEvVc1qEat2Kdc8axh4NLhgj9QaPg",
+      authDomain: "earti-1.web.app",
+      projectId: "earti-1",
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
-  <div class="container">
+  <!-- Authentication UI -->
+  <div id="authContainer" style="text-align: center; padding: 2rem;">
+    <button id="signInBtn">Sign in with Google</button>
+    <button id="signOutBtn" style="display: none;">Sign out</button>
+    <p id="userInfo"></p>
+    <div id="loadingAuth" style="display: none; margin: 1rem 0;">
+      <div class="loading-indicator"></div>
+      <p>Checking authentication...</p>
+    </div>
+  </div>
+
+  <!-- Main content - hidden by default -->
+  <div class="container" id="mainContainer">
+    <div style="text-align: center; margin-bottom: 1rem;">
+      <button id="backBtn" onclick="window.location.href='index.html'" 
+              style="margin-right: 1rem;">← Back to EARTI Selection</button>
+      <button id="signOutBtn2" style="display: none;">Sign out</button>
+      <p id="userInfo2"></p>
+    </div>
+
     <div class="camera-selector">
       <label for="cameraSelect">Choose camera view:</label>
       <select id="cameraSelect">
@@ -20,6 +51,113 @@
     <div id="videoContainer" class="video-container"></div>
     <div id="controlsContainer" class="controls-container"></div>
   </div>
+
+  <script>
+    // Authentication setup
+    const signInBtn = document.getElementById("signInBtn");
+    const signOutBtn = document.getElementById("signOutBtn");
+    const signOutBtn2 = document.getElementById("signOutBtn2");
+    const userInfo = document.getElementById("userInfo");
+    const userInfo2 = document.getElementById("userInfo2");
+    const authContainer = document.getElementById("authContainer");
+    const mainContainer = document.getElementById("mainContainer");
+    const loadingAuth = document.getElementById("loadingAuth");
+
+    const auth = firebase.auth();
+    const provider = new firebase.auth.GoogleAuthProvider();
+
+    // Show loading initially
+    loadingAuth.style.display = "block";
+    signInBtn.style.display = "none";
+
+    // Sign in handlers
+    const signInHandler = () => {
+      auth.signInWithPopup(provider).catch(error => {
+        alert("Sign-in failed: " + error.message);
+        loadingAuth.style.display = "none";
+        signInBtn.style.display = "inline-block";
+      });
+    };
+
+    const signOutHandler = () => {
+      auth.signOut();
+    };
+
+    signInBtn.onclick = signInHandler;
+    signOutBtn.onclick = signOutHandler;
+    signOutBtn2.onclick = signOutHandler;
+
+    // Authentication state listener
+    auth.onAuthStateChanged(user => {
+      loadingAuth.style.display = "none";
+      
+      if (user) {
+        // Signed in - show main content
+        console.log("User authenticated:", user.displayName);
+        authContainer.style.display = "none";
+        mainContainer.style.display = "block";
+        
+        // Update user info in both locations
+        userInfo2.textContent = `Signed in as ${user.displayName}`;
+        signOutBtn2.style.display = "inline-block";
+        
+        // Initialize the viewer functionality
+        initializeViewer();
+      } else {
+        // Not signed in - show auth UI
+        console.log("User not authenticated");
+        authContainer.style.display = "block";
+        mainContainer.style.display = "none";
+        signInBtn.style.display = "inline-block";
+        signOutBtn.style.display = "none";
+        signOutBtn2.style.display = "none";
+        userInfo.textContent = "";
+        userInfo2.textContent = "";
+      }
+    });
+
+    // Initialize viewer functionality after authentication
+    function initializeViewer() {
+      console.log("Initializing viewer...");
+      
+      // Check if user selected an EARTI
+      const selectedEarti = localStorage.getItem("selectedEarti");
+      if (!selectedEarti) {
+        console.warn("No EARTI selected, redirecting to selection page");
+        window.location.href = "index.html";
+        return;
+      }
+      
+      console.log("Selected EARTI:", selectedEarti);
+      
+      // Add EARTI selector if needed
+      const cameraSelector = document.querySelector('.camera-selector');
+      let eartiSelect = document.getElementById('eartiSelect');
+      
+      if (!eartiSelect) {
+        const eartiSelectorDiv = document.createElement('div');
+        eartiSelectorDiv.style.marginBottom = '1rem';
+        
+        const eartiLabel = document.createElement('label');
+        eartiLabel.textContent = 'Selected EARTI: ';
+        eartiLabel.style.marginRight = '0.5rem';
+        
+        eartiSelect = document.createElement('select');
+        eartiSelect.id = 'eartiSelect';
+        eartiSelect.innerHTML = `
+          <option value="earti1" ${selectedEarti === 'earti1' ? 'selected' : ''}>EARTI 1</option>
+          <option value="earti2" ${selectedEarti === 'earti2' ? 'selected' : ''}>EARTI 2</option>
+        `;
+        
+        eartiSelectorDiv.appendChild(eartiLabel);
+        eartiSelectorDiv.appendChild(eartiSelect);
+        cameraSelector.insertBefore(eartiSelectorDiv, cameraSelector.firstChild);
+      }
+      
+      // Set the selected EARTI
+      eartiSelect.value = selectedEarti;
+    }
+  </script>
 
   <script src="script.js"></script>
 </body>
