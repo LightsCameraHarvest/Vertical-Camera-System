@@ -254,7 +254,7 @@ function createDPad(label) {
         sendCommand({ command: dir, camera: label });
         intervalId = setInterval(() => {
           sendCommand({ command: dir, camera: label });
-        }, 150);
+        }, 100);
       };
 
       // Stop sending when released
