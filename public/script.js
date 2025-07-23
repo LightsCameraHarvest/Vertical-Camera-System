@@ -272,7 +272,7 @@ function createDPad(displayLabel, cameraId = null) {
       const startSending = () => {
         sendCommand({ command: dir, camera: actualCameraId }); // Use actual camera ID
         intervalId = setInterval(() => {
-          sendCommand({ command: dir, camera: actualCameraId });
+          sendCommand({ command: dir, camera: label });
         }, 150);
       };
 
