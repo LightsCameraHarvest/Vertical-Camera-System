@@ -12,6 +12,9 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ** CHANGE TO CAM NUMBER!!***
+# this_cam = 'cam1'
+
 # Pin definitions
 ena_pin = 17
 dir_pin = 27
@@ -20,11 +23,11 @@ motor_step_size = 100
 max_steps = 4400  # ***NEED TO TEST!!!***
 tray_steps = 1400
 
-servo_pin = 13  # or 19
+servo_pin = 19  # or 13
 min_pulse = 1000
 max_pulse = 2000
 servo_pos = min_pulse + (max_pulse-min_pulse) // 2 # midpoint
-servo_step_size = 10
+servo_step_size = 15
 limit_pin = 6  # or 26
 # because we have no bottom limit pin, we need to keep track of steps
 total_steps = 0
@@ -41,8 +44,6 @@ GPIO.setup(dir_pin, GPIO.OUT)
 GPIO.setup(stp_pin, GPIO.OUT)
 GPIO.setup(limit_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-current_level = 0
-target_level = 0
 
 def isTopPressed():
     return GPIO.input(limit_pin) == GPIO.LOW
@@ -101,7 +102,6 @@ def stepTo(target_step):
             stepDown()
     return
 
-
 def panCCW():
     global servo_pos
     # servo_pos = max(min_pulse, servo_pos - servo_step_size)
@@ -109,11 +109,21 @@ def panCCW():
     for i in range(servo_step_size):
         servo_pos = max(min_pulse, servo_pos - 1)
         pi.set_servo_pulsewidth(servo_pin, servo_pos)
-
+        sleep(0.01)
 def panCW():
     global servo_pos
     servo_pos = min(max_pulse, servo_pos + servo_step_size)
     pi.set_servo_pulsewidth(servo_pin, servo_pos)
+    sleep(0.01)
+
+def panTo(target_pulse):
+    global servo_pos
+    while target_pulse != servo_pos:
+        if target_pulse < servo_pos:
+            panCCW()
+        else:
+            panCW()
+    return
 
 # Keep track of connected clients
 connected_clients = set()
@@ -121,7 +131,7 @@ connected_clients = set()
 # WebSocket handler with better error handling and connection management
 async def handleCommand(websocket, path):
     """Handle WebSocket connections and commands"""
-    client_address = f"{websocket.remote_address[0]}:{websocket.remote_address[1                                                                                                             ]}"
+    client_address = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
     logger.info(f"New WebSocket connection from {client_address}")
 
     # Add client to connected set
@@ -146,7 +156,7 @@ async def handleCommand(websocket, path):
                 command = data.get('command')
                 camera = data.get('camera', 'unknown')
 
-                logger.info(f"Received command: {command} from camera: {camera}"                                                                                                             )
+                logger.info(f"Received command: {command} from camera: {camera}")
 
                 # Map commands to direction characters for easier handling
                 command_map = {
@@ -159,39 +169,39 @@ async def handleCommand(websocket, path):
                 # Use mapped command if it exists, otherwise use original
                 cmd = command_map.get(command, command)
 
-                if cmd == 'u':  # Up arrow
+                if cmd == 'u' and camera == this_cam:  # Up arrow
                     stepUp()
                     logger.info("Executed stepUp")
-                elif cmd == 'd':  # Down arrow
+                elif cmd == 'd' and camera == this_cam:  # Down arrow
                     stepDown()
                     logger.info("Executed stepDown")
-                elif cmd == 'l':  # Left arrow
+                elif cmd == 'l' and camera == this_cam:  # Left arrow
                     panCCW()
                     logger.info("Executed panCCW")
-                elif cmd == 'r':  # Right arrow
+                elif cmd == 'r' and camera == this_cam:  # Right arrow
                     panCW()
                     logger.info("Executed panCW")
-                elif command == '1':
+                elif command == '1' and camera == this_cam:
                     stepTo(tray_steps*1)
-                elif command == '2':
+                elif command == '2' and camera == this_cam:
                     stepTo(tray_steps*2)
-                elif command == '3':
+                elif command == '3' and camera == this_cam:
                     stepTo(tray_steps*3)
-                elif command == '4':
+                elif command == '4' and camera == this_cam:
                     stepTo(tray_steps*4)
-                elif command == '5':
+                elif command == '5' and camera == this_cam:
                     stepTo(tray_steps*5)
-                elif command == '6':
+                elif command == '6' and camera == this_cam:
                     stepTo(tray_steps*6)
-                elif command == '7':
+                elif command == '7' and camera == this_cam:
                     stepTo(tray_steps*7)
-                elif command == '8':
+                elif command == '8' and camera == this_cam:
                     stepTo(tray_steps*8)
-                elif command == '9':
+                elif command == '9' and camera == this_cam:
                     stepTo(tray_steps*9)
-                elif command == '10':
+                elif command == '10' and camera == this_cam:
                     stepTo(tray_steps*10)
-                elif cmd == 'home':  # Home command
+                elif cmd == 'home' and camera == this_cam:  # Home command
                     goHome()
                     logger.info("Executed goHome")
                 else:
@@ -221,15 +231,15 @@ async def handleCommand(websocket, path):
                 }))
 
     except websockets.exceptions.ConnectionClosed:
-        logger.info(f"WebSocket connection closed normally for {client_address}"                                                                                                             )
+        logger.info(f"WebSocket connection closed normally for {client_address}")
     except websockets.exceptions.ConnectionClosedError as e:
-        logger.warning(f"WebSocket connection closed with error for {client_addr                                                                                                             ess}: {e}")
+        logger.warning(f"WebSocket connection closed with error for {client_address}: {e}")
     except Exception as e:
-        logger.error(f"Unexpected error in WebSocket handler for {client_address                                                                                                             }: {e}")
+        logger.error(f"Unexpected error in WebSocket handler for {client_address}: {e}")
     finally:
         # Remove client from connected set
         connected_clients.discard(websocket)
-        logger.info(f"Client {client_address} disconnected. Active connections:                                                                                                              {len(connected_clients)}")
+        logger.info(f"Client {client_address} disconnected. Active connections: {len(connected_clients)}")
 
 # Health check endpoint simulation
 async def health_check():
@@ -237,8 +247,8 @@ async def health_check():
     while True:
         try:
             await asyncio.sleep(30)  # Check every 30 seconds
-            logger.info(f"Health check - Active WebSocket connections: {len(conn                                                                                                             ected_clients)}")
-            logger.info(f"Servo position: {servo_pos}, Total steps: {total_steps                                                                                                             }")
+            logger.info(f"Health check - Active WebSocket connections: {len(connected_clients)}")
+            logger.info(f"Servo position: {servo_pos}, Total steps: {total_steps}")
         except Exception as e:
             logger.error(f"Health check error: {e}")
 
@@ -247,12 +257,12 @@ async def main():
     """Main function to start WebSocket server"""
     # Start health check task
     health_task = asyncio.create_task(health_check())
-    pi.set_servo_pulsewidth(servo_pin, servo_pos)
+    panTo(servo_pos)
     goHome()
     GPIO.output(ena_pin, GPIO.LOW)
 
     try:
-        # Create WebSocket server with specific settings for Cloudflare Tunnel c                                                                                                             ompatibility
+        # Create WebSocket server with specific settings for Cloudflare Tunnel compatibility
         server = await websockets.serve(
             handleCommand,
             "0.0.0.0",  # Bind to all interfaces
