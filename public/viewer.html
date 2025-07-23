@@ -17,6 +17,9 @@
     };
     firebase.initializeApp(firebaseConfig);
   </script>
+  <!-- Firebase Firestore -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore-compat.js"></script>
+  <script src="auth-service.js"></script>
 </head>
 <body>
   <!-- Authentication UI -->
@@ -89,31 +92,27 @@
 
     // Authentication state listener
     auth.onAuthStateChanged(user => {
-      loadingAuth.style.display = "none";
-      
-      if (user) {
-        // Signed in - show main content
-        console.log("User authenticated:", user.displayName);
-        authContainer.style.display = "none";
-        mainContainer.style.display = "block";
-        
-        // Update user info in both locations
-        userInfo2.textContent = `Signed in as ${user.displayName}`;
-        signOutBtn2.style.display = "inline-block";
-        
-        // Initialize the viewer functionality
-        initializeViewer();
-      } else {
-        // Not signed in - show auth UI
-        console.log("User not authenticated");
-        authContainer.style.display = "block";
-        mainContainer.style.display = "none";
-        signInBtn.style.display = "inline-block";
-        signOutBtn.style.display = "none";
-        signOutBtn2.style.display = "none";
-        userInfo.textContent = "";
-        userInfo2.textContent = "";
-      }
+        handleAuthStateChange(
+            user,
+            // onAuthorized callback
+            (user) => {
+                authContainer.style.display = "none";
+                mainContainer.style.display = "block";
+                userInfo2.textContent = `Signed in as ${user.displayName}`;
+                signOutBtn2.style.display = "inline-block";
+                initializeViewer();
+            },
+            // onUnauthorized callback
+            () => {
+                authContainer.style.display = "block";
+                mainContainer.style.display = "none";
+                signInBtn.style.display = "inline-block";
+                signOutBtn.style.display = "none";
+                signOutBtn2.style.display = "none";
+                userInfo.textContent = "";
+                userInfo2.textContent = "";
+            }
+        );
     });
 
     // Initialize viewer functionality after authentication

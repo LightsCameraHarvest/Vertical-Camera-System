@@ -205,26 +205,45 @@ document.addEventListener("DOMContentLoaded", () => {
     const presetSelect = document.createElement("select");
     presetSelect.className = "preset-select";
     presetSelect.ariaLabel = `${label} preset`;
+    
+    // Add "None" option as the first option
+    const noneOpt = document.createElement("option");
+    noneOpt.value = "none";
+    noneOpt.textContent = "None";
+    noneOpt.selected = true; // Make it the default selection
+    presetSelect.appendChild(noneOpt);
+    
+    // Add numbered preset options
     for (let i = 1; i <= 9; i++) {
       const opt = document.createElement("option");
       opt.value = i;
       opt.textContent = `Preset ${i}`;
       presetSelect.appendChild(opt);
     }
+    
     presetSelect.addEventListener("change", () => {
-      console.log(`${label} preset selected:`, presetSelect.value);
-      // **TODO: Send preset change to Raspberry Pi
-      sendCommand({ command: presetSelect.value, camera: label });
+      if (presetSelect.value === "none") {
+        console.log(`${label} preset cleared (none selected)`);
+        // Optionally send a "clear preset" command to your Pi
+        // sendCommand({ command: "clear_preset", camera: label });
+      } else {
+        console.log(`${label} preset selected:`, presetSelect.value);
+        sendCommand({ command: presetSelect.value, camera: label });
+      }
     });
+    
     return presetSelect;
   }
 
-function createDPad(label) {
+function createDPad(displayLabel, cameraId = null) {
+  // If no cameraId provided, use displayLabel as camera ID (backward compatibility)
+  const actualCameraId = cameraId || displayLabel;
+  
   const wrapper = document.createElement("div");
   wrapper.className = "control-group";
 
   const title = document.createElement("h3");
-  title.textContent = label;
+  title.textContent = displayLabel; // Use display label for UI
 
   const dpadWrapper = document.createElement("div");
   dpadWrapper.className = "dpad-wrapper";
@@ -251,10 +270,10 @@ function createDPad(label) {
 
       // Start sending repeatedly when pressed
       const startSending = () => {
-        sendCommand({ command: dir, camera: label });
+        sendCommand({ command: dir, camera: actualCameraId }); // Use actual camera ID
         intervalId = setInterval(() => {
           sendCommand({ command: dir, camera: label });
-        }, 100);
+        }, 150);
       };
 
       // Stop sending when released
@@ -285,7 +304,7 @@ function createDPad(label) {
   });
 
   dpadWrapper.appendChild(dpad);
-  dpadWrapper.appendChild(createPresetSelect(label));
+  dpadWrapper.appendChild(createPresetSelect(actualCameraId)); // Use actual camera ID for presets
   wrapper.appendChild(title);
   wrapper.appendChild(dpadWrapper);
   return wrapper;
@@ -730,7 +749,7 @@ function createDPad(label) {
   async function setupSingleCamera(earti, cameraId) {
     cleanupAllConnections();
     videoContainer.innerHTML = "";
-    controlsContainer.innerHTML = "";
+    controlsContainer.innerHTML = ""; // Make sure this clears completely
 
     const video = document.createElement("video");
     video.id = "video";
@@ -747,7 +766,9 @@ function createDPad(label) {
     const streamUrl = streamURLs[earti][cameraId];
     await setupWebRTCStreamForVideo(streamUrl, video, cameraId);
     
-    controlsContainer.appendChild(createDPad(`Camera ${cameraId === "cam1" ? "1" : "2"}`));
+    // Fix: Use the actual cameraId as the camera identifier, not a display label
+    // This ensures commands are sent with the correct camera identifier
+    controlsContainer.appendChild(createDPad(cameraId));
   }
 
   async function setupBothCameras(earti) {
@@ -841,8 +862,8 @@ function createDPad(label) {
         await Promise.all([pc1Promise, pc2Promise]);
       }
       
-      controlsContainer.appendChild(createDPad("Camera 1"));
-      controlsContainer.appendChild(createDPad("Camera 2"));
+      controlsContainer.appendChild(createDPad("Camera 1", "cam1"));
+      controlsContainer.appendChild(createDPad("Camera 2", "cam2"));
       
     } catch (error) {
       console.error("Error setting up both cameras:", error);
