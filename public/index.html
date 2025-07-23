@@ -17,6 +17,9 @@
     };
     firebase.initializeApp(firebaseConfig);
   </script>
+  <!-- Firebase Firestore -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore-compat.js"></script>
+  <script src="auth-service.js"></script>
 </head>
 <body>
   <!-- Will change later -->
@@ -54,19 +57,23 @@
     };
 
     auth.onAuthStateChanged(user => {
-      if (user) {
-        // Signed in
-        signInBtn.style.display = "none";
-        signOutBtn.style.display = "inline-block";
-        userInfo.textContent = `Signed in as ${user.displayName}`;
-        container.style.display = "block";
-      } else {
-        // Not signed in
-        signInBtn.style.display = "inline-block";
-        signOutBtn.style.display = "none";
-        userInfo.textContent = "";
-        container.style.display = "none"; // hide EARTI selection
-      }
+        handleAuthStateChange(
+            user,
+            // onAuthorized callback
+            (user) => {
+                signInBtn.style.display = "none";
+                signOutBtn.style.display = "inline-block";
+                userInfo.textContent = `Signed in as ${user.displayName}`;
+                container.style.display = "block";
+            },
+            // onUnauthorized callback
+            () => {
+                signInBtn.style.display = "inline-block";
+                signOutBtn.style.display = "none";
+                userInfo.textContent = "";
+                container.style.display = "none";
+            }
+        );
     });
   </script>
 </body>
