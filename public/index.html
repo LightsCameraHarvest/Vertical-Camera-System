@@ -5,8 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Select EARTI</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- Firebase App (core SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
+  <!-- Firebase Authentication -->
+  <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDHVRDEvVc1qEat2Kdc8axh4NLhgj9QaPg",
+      authDomain: "earti-1.web.app",
+      projectId: "earti-1",
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
+  <!-- Will change later -->
+  <button id="signInBtn">Sign in with Google</button>
+  <button id="signOutBtn" style="display: none;">Sign out</button>
+  <p id="userInfo"></p>
+
   <div class="container">
     <h1>Select your EARTI</h1>
     <button onclick="selectEarti('earti1')">EARTI 1</button>
@@ -17,6 +34,40 @@
       localStorage.setItem("selectedEarti", eariId);
       window.location.href = "viewer.html";
     }
+
+    const signInBtn = document.getElementById("signInBtn");
+    const signOutBtn = document.getElementById("signOutBtn");
+    const userInfo = document.getElementById("userInfo");
+    const container = document.querySelector(".container");
+
+    const auth = firebase.auth();
+    const provider = new firebase.auth.GoogleAuthProvider();
+
+    signInBtn.onclick = () => {
+      auth.signInWithPopup(provider).catch(error => {
+        alert("Sign-in failed: " + error.message);
+      });
+    };
+
+    signOutBtn.onclick = () => {
+      auth.signOut();
+    };
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        // Signed in
+        signInBtn.style.display = "none";
+        signOutBtn.style.display = "inline-block";
+        userInfo.textContent = `Signed in as ${user.displayName}`;
+        container.style.display = "block";
+      } else {
+        // Not signed in
+        signInBtn.style.display = "inline-block";
+        signOutBtn.style.display = "none";
+        userInfo.textContent = "";
+        container.style.display = "none"; // hide EARTI selection
+      }
+    });
   </script>
 </body>
 </html>
