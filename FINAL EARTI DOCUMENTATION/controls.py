@@ -19,8 +19,13 @@ logger = logging.getLogger(__name__)
 ena_pin = 17
 dir_pin = 27
 stp_pin = 22
-motor_step_size = 100
-max_steps = 4400  # ***NEED TO TEST!!!***
+m2_pin = 24
+m1_pin = 23
+m0_pin = 18
+slp_pin = 25
+rst_pin = 12
+motor_step_size = 115
+max_steps = 18000  # ***FOR UNCUT EXTRUSION***
 tray_steps = 1400
 
 servo_pin = 19  # or 13
@@ -39,6 +44,18 @@ if not pi.connected:
 
 # GPIO setup
 GPIO.setmode(GPIO.BCM)  # GPIO numbers not board numbers
+GPIO.setup(m2_pin, GPIO.OUT)
+GPIO.setup(m1_pin, GPIO.OUT)
+GPIO.setup(m0_pin, GPIO.OUT)
+GPIO.setup(slp_pin, GPIO.OUT)
+GPIO.setup(rst_pin, GPIO.OUT)
+GPIO.output(slp_pin, GPIO.HIGH)
+GPIO.output(rst_pin, GPIO.HIGH)
+# 400 steps
+GPIO.output(m2_pin, GPIO.LOW)
+GPIO.output(m1_pin, GPIO.LOW)
+GPIO.output(m0_pin, GPIO.HIGH)
+
 GPIO.setup(ena_pin, GPIO.OUT)
 GPIO.setup(dir_pin, GPIO.OUT)
 GPIO.setup(stp_pin, GPIO.OUT)
@@ -64,7 +81,7 @@ def goHome():
     total_steps = 0
     current_level = 1
     target_level = 1
-    print("Homing complete. Current level: 1")
+    print("Homing complete. Current level: 0")
     GPIO.output(ena_pin, GPIO.HIGH)
     return
 
@@ -95,7 +112,7 @@ def stepDown():
 
 def stepTo(target_step):
     global total_steps
-    while target_step != total_steps:
+    while target_step < total_steps - motor_step_size or target_step > total_steps + motor_step_size:
         if target_step < total_steps:
             stepUp()
         else:
@@ -118,7 +135,7 @@ def panCW():
 
 def panTo(target_pulse):
     global servo_pos
-    while target_pulse != servo_pos:
+    while target_pulse < servo_pos - servo_step_size or target_pulse > servo_pos - servo_step_size:
         if target_pulse < servo_pos:
             panCCW()
         else:
@@ -252,7 +269,7 @@ async def health_check():
         except Exception as e:
             logger.error(f"Health check error: {e}")
 
-# Run the WebSocket server
+# !! IMPORTANT note: pans and homes before starting websocket server
 async def main():
     """Main function to start WebSocket server"""
     # Start health check task
