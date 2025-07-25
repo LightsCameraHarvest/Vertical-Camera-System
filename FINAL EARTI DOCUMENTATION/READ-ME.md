@@ -6,3 +6,6 @@
 5. Firestore Database:
 6. Cloudflare Tunnel:
 7. Controls Python Code: On the Raspberry Pi, controls.py is located in home/<username>/
+
+<h2> To Do: </h2>
+More in Google Docs
